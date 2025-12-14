@@ -1,0 +1,40 @@
+{
+    "accounts": [
+        {
+            "id": "toutiao_1",
+            "platform": "toutiao",
+            "name": "今日头条-账号1",
+            "profile_dir": "toutiao_account1",
+            "enabled": true
+        },
+        {
+            "id": "toutiao_2",
+            "platform": "toutiao",
+            "name": "今日头条-账号2",
+            "profile_dir": "toutiao_account2",
+            "enabled": true
+        },
+        {
+            "id": "toutiao_3",
+            "platform": "toutiao",
+            "name": "今日头条-账号3",
+            "profile_dir": "toutiao_account3",
+            "enabled": true
+        },
+        {
+            "id": "sohu_1",
+            "platform": "sohu",
+            "name": "搜狐-账号1",
+            "profile_dir": "sohu_account1",
+            "enabled": true
+        },
+        {
+            "id": "sohu_2",
+            "platform": "sohu",
+            "name": "搜狐-账号2",
+            "profile_dir": "sohu_account2",
+            "enabled": true
+        }
+    ]
+}
+
