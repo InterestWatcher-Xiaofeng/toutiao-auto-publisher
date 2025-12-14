@@ -82,20 +82,29 @@ class AsyncWorker(QThread):
         else:
             adapter = SohuAdapter(account_id, profile_dir, account_name)
 
-        success = self._loop.run_until_complete(adapter.wait_for_login())
+        result = self._loop.run_until_complete(adapter.wait_for_login())
+
+        # wait_for_login 现在返回 (success, nickname) 元组
+        if isinstance(result, tuple):
+            success, nickname = result
+        else:
+            # 兼容旧版本返回bool的情况
+            success = result
+            nickname = ""
 
         # 登录成功后，关闭浏览器以释放资源
         # 登录状态已保存到 storage_state.json，发布时会重新加载
         self._loop.run_until_complete(browser_manager.cleanup())
 
         self._kwargs['success'] = success
+        self._kwargs['nickname'] = nickname
 
 
 class MainWindow(QMainWindow):
     """主窗口"""
 
     # 自定义信号
-    _login_finished_signal = Signal(bool)
+    _login_finished_signal = Signal(bool, str)  # success, nickname
 
     def __init__(self):
         super().__init__()
@@ -281,7 +290,9 @@ class MainWindow(QMainWindow):
             self.account_table.setCellWidget(i, 2, login_btn)
 
             # 添加到任务配置表
-            self.task_table.setItem(i, 0, QTableWidgetItem(acc.account_name))
+            task_name_item = QTableWidgetItem(acc.account_name)
+            task_name_item.setData(Qt.UserRole, acc.account_id)  # 保存account_id以便后续更新
+            self.task_table.setItem(i, 0, task_name_item)
 
             spin = QSpinBox()
             spin.setRange(0, 100)
@@ -329,27 +340,81 @@ class MainWindow(QMainWindow):
             profile_dir=profile_dir
         )
         self._login_worker.finished.connect(self._on_login_worker_finished)
-        self._login_worker.error.connect(lambda e: self._login_finished_signal.emit(False))
+        self._login_worker.error.connect(lambda e: self._login_finished_signal.emit(False, ""))
         self._login_worker.start()
 
     def _on_login_worker_finished(self):
         """登录工作线程完成"""
         success = getattr(self._login_worker, '_kwargs', {}).get('success', False)
-        self._login_finished_signal.emit(success)
+        nickname = getattr(self._login_worker, '_kwargs', {}).get('nickname', "")
+        self._login_finished_signal.emit(success, nickname)
 
-    def _on_login_finished(self, success: bool):
+    def _on_login_finished(self, success: bool, nickname: str):
         """登录完成回调（在主线程中执行）"""
         btn = getattr(self, '_current_login_btn', None)
         if btn:
+            account_id = btn.property("account_id")
+
             if success:
                 btn.setText("已登录 ✓")
                 btn.setStyleSheet("background-color: #4CAF50; color: white;")
-                self.log("登录成功！")
+
+                # 如果获取到昵称，更新显示
+                if nickname:
+                    self._update_account_nickname(account_id, nickname)
+                    self.log(f"登录成功！账号昵称: {nickname}")
+                else:
+                    self.log("登录成功！")
             else:
                 btn.setText("登录")
                 btn.setStyleSheet("")
                 self.log("登录失败或超时")
             btn.setEnabled(True)
+
+    def _update_account_nickname(self, account_id: str, nickname: str):
+        """更新账号昵称显示和配置"""
+        from src.utils.config import config
+
+        # 更新账号表格中的显示
+        for row in range(self.account_table.rowCount()):
+            name_item = self.account_table.item(row, 1)
+            if name_item and name_item.data(Qt.UserRole) == account_id:
+                # 获取平台前缀
+                platform = ""
+                for acc in scheduler.account_tasks:
+                    if acc.account_id == account_id:
+                        platform = acc.platform
+                        break
+
+                # 组合新名称：平台-昵称
+                platform_prefix = "今日头条" if platform == "toutiao" else "搜狐"
+                new_name = f"{platform_prefix}-{nickname}"
+                name_item.setText(new_name)
+                break
+
+        # 更新任务配置表格中的显示
+        for row in range(self.task_table.rowCount()):
+            task_item = self.task_table.item(row, 0)
+            if task_item and task_item.data(Qt.UserRole) == account_id:
+                platform = ""
+                for acc in scheduler.account_tasks:
+                    if acc.account_id == account_id:
+                        platform = acc.platform
+                        break
+                platform_prefix = "今日头条" if platform == "toutiao" else "搜狐"
+                new_name = f"{platform_prefix}-{nickname}"
+                task_item.setText(new_name)
+                break
+
+        # 更新scheduler中的账号名称
+        for acc in scheduler.account_tasks:
+            if acc.account_id == account_id:
+                platform_prefix = "今日头条" if acc.platform == "toutiao" else "搜狐"
+                acc.account_name = f"{platform_prefix}-{nickname}"
+                break
+
+        # 保存到配置文件
+        config.update_account_nickname(account_id, nickname)
 
     def import_excel(self):
         """导入Excel或CSV文件"""

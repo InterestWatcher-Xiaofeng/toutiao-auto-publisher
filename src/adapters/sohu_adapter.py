@@ -60,8 +60,45 @@ class SohuAdapter(BaseAdapter):
             logger.error(f"[{self.account_name}] 检查登录状态失败: {e}")
             return False
     
-    async def wait_for_login(self) -> bool:
-        """等待用户手动登录"""
+    async def get_nickname(self) -> str:
+        """获取当前登录账号的昵称。
+
+        Returns:
+            str: 账号昵称，获取失败返回空字符串
+        """
+        try:
+            page = await self.get_page()
+
+            # 尝试获取用户昵称
+            selectors = [
+                ".user-name",
+                ".nick-name",
+                ".author-name",
+            ]
+
+            for selector in selectors:
+                try:
+                    element = await page.wait_for_selector(selector, timeout=3000)
+                    if element:
+                        nickname = await element.text_content()
+                        if nickname and nickname.strip():
+                            nickname = nickname.strip()
+                            logger.info(f"[{self.account_name}] 获取到昵称: {nickname}")
+                            return nickname
+                except Exception:
+                    continue
+
+            return ""
+        except Exception as e:
+            logger.error(f"[{self.account_name}] 获取昵称失败: {e}")
+            return ""
+
+    async def wait_for_login(self) -> tuple:
+        """等待用户手动登录
+
+        Returns:
+            tuple: (success: bool, nickname: str) 登录是否成功以及账号昵称
+        """
         try:
             page = await self.get_page()
             logger.info(f"[{self.account_name}] 请在浏览器中手动登录...")
@@ -78,7 +115,7 @@ class SohuAdapter(BaseAdapter):
                 # 检查取消标志
                 if self._cancelled:
                     logger.info(f"[{self.account_name}] 登录等待已取消")
-                    return False
+                    return (False, "")
 
                 await asyncio.sleep(check_interval)
                 waited += check_interval
@@ -87,17 +124,20 @@ class SohuAdapter(BaseAdapter):
                 if 'login' not in current_url:
                     logger.info(f"[{self.account_name}] 登录成功！")
                     await self.save_login_state()
-                    return True
+
+                    # 获取昵称
+                    nickname = await self.get_nickname()
+                    return (True, nickname)
 
                 if waited % 5 == 0:  # 每5秒打印一次日志
                     logger.debug(f"[{self.account_name}] 等待登录中... ({waited}/{max_wait}秒)")
 
             logger.warning(f"[{self.account_name}] 登录超时")
-            return False
+            return (False, "")
 
         except Exception as e:
             logger.error(f"[{self.account_name}] 等待登录失败: {e}")
-            return False
+            return (False, "")
     
     async def publish_article(self, article: Article) -> Dict[str, Any]:
         """

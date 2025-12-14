@@ -93,8 +93,53 @@ class ToutiaoAdapter(BaseAdapter):
         logger.info(f"[{self.account_name}] 判断为【已登录】（URL 未包含 login/auth）")
         return True
 
-    async def wait_for_login(self) -> bool:
-        """在浏览器里打开登录页，等待你手动登录（简化版）。"""
+    async def get_nickname(self) -> str:
+        """获取当前登录账号的昵称。
+
+        Returns:
+            str: 账号昵称，获取失败返回空字符串
+        """
+        try:
+            page = await self.get_page()
+
+            # 访问首页获取昵称
+            await page.goto(self.HOME_URL, wait_until="domcontentloaded", timeout=15000)
+            await asyncio.sleep(1)
+
+            # 尝试多个可能的选择器获取昵称
+            selectors = [
+                ".user-info-name",  # 用户信息区域的名称
+                ".header-user-name",  # 头部用户名
+                ".account-name",  # 账号名称
+                ".mp-header-user-info .name",  # 头条创作者后台用户名
+            ]
+
+            for selector in selectors:
+                try:
+                    element = await page.wait_for_selector(selector, timeout=3000)
+                    if element:
+                        nickname = await element.text_content()
+                        if nickname and nickname.strip():
+                            nickname = nickname.strip()
+                            logger.info(f"[{self.account_name}] 获取到昵称: {nickname}")
+                            return nickname
+                except Exception:
+                    continue
+
+            # 如果上面的选择器都找不到，尝试从页面标题或其他地方获取
+            logger.warning(f"[{self.account_name}] 无法获取昵称，使用默认名称")
+            return ""
+
+        except Exception as e:
+            logger.error(f"[{self.account_name}] 获取昵称失败: {e}")
+            return ""
+
+    async def wait_for_login(self) -> tuple:
+        """在浏览器里打开登录页，等待你手动登录（简化版）。
+
+        Returns:
+            tuple: (success: bool, nickname: str) 登录是否成功以及账号昵称
+        """
 
         page = await self.get_page()
         logger.info(f"[{self.account_name}] 请在弹出的浏览器中手动登录 Toutiao...")
@@ -103,7 +148,7 @@ class ToutiaoAdapter(BaseAdapter):
             await page.goto(self.LOGIN_URL, wait_until="domcontentloaded", timeout=30000)
         except Exception as e:
             logger.error(f"[{self.account_name}] 打开登录页失败: {e}")
-            return False
+            return (False, "")
 
         # 简单轮询 URL 是否还包含 login/auth，最长 5 分钟
         max_wait = 300
@@ -113,7 +158,7 @@ class ToutiaoAdapter(BaseAdapter):
         while waited < max_wait:
             if self._cancelled:
                 logger.info(f"[{self.account_name}] 登录等待已取消")
-                return False
+                return (False, "")
 
             await asyncio.sleep(interval)
             waited += interval
@@ -125,7 +170,10 @@ class ToutiaoAdapter(BaseAdapter):
                     await self.save_login_state()
                 except Exception:
                     pass
-                return True
+
+                # 获取昵称
+                nickname = await self.get_nickname()
+                return (True, nickname)
 
             if waited % 5 == 0:
                 logger.debug(
@@ -133,7 +181,7 @@ class ToutiaoAdapter(BaseAdapter):
                 )
 
         logger.warning(f"[{self.account_name}] 登录等待超时")
-        return False
+        return (False, "")
 
     async def publish_article(self, article: Article) -> Dict[str, Any]:
         """完整的今日头条文章发布流程。

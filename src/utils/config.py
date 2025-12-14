@@ -65,6 +65,27 @@ class Config:
             return profile_dir
         return ""
 
+    def update_account_nickname(self, account_id: str, nickname: str):
+        """更新账号昵称并保存到配置文件
+
+        Args:
+            account_id: 账号ID
+            nickname: 新昵称
+        """
+        for acc in self._accounts:
+            if acc['id'] == account_id:
+                # 获取平台前缀
+                platform = acc.get('platform', '')
+                platform_prefix = "今日头条" if platform == "toutiao" else "搜狐"
+
+                # 更新名称
+                acc['name'] = f"{platform_prefix}-{nickname}"
+                acc['nickname'] = nickname  # 保存原始昵称
+
+                # 保存到文件
+                self.save_accounts()
+                break
+
 
 # 全局配置实例
 config = Config()
