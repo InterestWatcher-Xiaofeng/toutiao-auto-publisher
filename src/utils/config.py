@@ -86,6 +86,53 @@ class Config:
                 self.save_accounts()
                 break
 
+    def add_account(self, platform: str) -> Dict[str, Any]:
+        """添加新账号
+
+        Args:
+            platform: 平台名称 ('toutiao' 或 'sohu')
+
+        Returns:
+            新创建的账号信息字典
+        """
+        # 计算该平台已有账号数量，生成新ID
+        platform_accounts = [acc for acc in self._accounts if acc['platform'] == platform]
+        new_index = len(platform_accounts) + 1
+
+        # 生成账号ID和目录名
+        account_id = f"{platform}_{new_index}"
+        profile_dir = f"{platform}_account{new_index}"
+
+        # 确保ID不重复（防止删除后重新添加冲突）
+        existing_ids = {acc['id'] for acc in self._accounts}
+        while account_id in existing_ids:
+            new_index += 1
+            account_id = f"{platform}_{new_index}"
+            profile_dir = f"{platform}_account{new_index}"
+
+        # 生成账号名称
+        platform_prefix = "今日头条" if platform == "toutiao" else "搜狐"
+        account_name = f"{platform_prefix}-账号{new_index}"
+
+        # 创建浏览器配置目录
+        full_profile_dir = os.path.join(BROWSER_PROFILES_DIR, profile_dir)
+        os.makedirs(full_profile_dir, exist_ok=True)
+
+        # 创建账号信息
+        new_account = {
+            "id": account_id,
+            "platform": platform,
+            "name": account_name,
+            "profile_dir": profile_dir,
+            "enabled": True
+        }
+
+        # 添加到列表并保存
+        self._accounts.append(new_account)
+        self.save_accounts()
+
+        return new_account
+
 
 # 全局配置实例
 config = Config()

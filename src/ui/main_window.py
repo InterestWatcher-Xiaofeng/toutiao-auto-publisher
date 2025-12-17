@@ -207,6 +207,25 @@ class MainWindow(QMainWindow):
         self.account_table.setColumnWidth(2, 80)
         layout.addWidget(self.account_table)
 
+        # 添加账号按钮区域
+        add_btn_layout = QHBoxLayout()
+
+        # 添加头条账号按钮
+        self.add_toutiao_btn = QPushButton("➕ 增加头条账号")
+        self.add_toutiao_btn.setMinimumHeight(35)
+        self.add_toutiao_btn.setStyleSheet("background-color: #2196F3; color: white;")
+        self.add_toutiao_btn.clicked.connect(lambda: self.on_add_account_clicked("toutiao"))
+        add_btn_layout.addWidget(self.add_toutiao_btn)
+
+        # 添加搜狐账号按钮
+        self.add_sohu_btn = QPushButton("➕ 增加搜狐账号")
+        self.add_sohu_btn.setMinimumHeight(35)
+        self.add_sohu_btn.setStyleSheet("background-color: #FF9800; color: white;")
+        self.add_sohu_btn.clicked.connect(lambda: self.on_add_account_clicked("sohu"))
+        add_btn_layout.addWidget(self.add_sohu_btn)
+
+        layout.addLayout(add_btn_layout)
+
         # 保留旧的list用于兼容
         self.account_list = QListWidget()
         self.account_list.setVisible(False)
@@ -315,6 +334,73 @@ class MainWindow(QMainWindow):
             if acc.account_id == account_id:
                 acc.enabled = enabled
                 break
+
+    def on_add_account_clicked(self, platform: str):
+        """点击添加账号按钮
+
+        Args:
+            platform: 平台名称 ('toutiao' 或 'sohu')
+        """
+        platform_name = "今日头条" if platform == "toutiao" else "搜狐"
+
+        # 调用scheduler添加账号
+        new_acc = scheduler.add_account(platform)
+
+        # 添加到账号表格
+        row = self.account_table.rowCount()
+        self.account_table.insertRow(row)
+
+        # 选择框
+        checkbox = QCheckBox()
+        checkbox.setChecked(True)
+        checkbox.setProperty("account_id", new_acc.account_id)
+        checkbox.stateChanged.connect(self.on_account_checkbox_changed)
+        checkbox_widget = QWidget()
+        checkbox_layout = QHBoxLayout(checkbox_widget)
+        checkbox_layout.addWidget(checkbox)
+        checkbox_layout.setAlignment(Qt.AlignCenter)
+        checkbox_layout.setContentsMargins(0, 0, 0, 0)
+        self.account_table.setCellWidget(row, 0, checkbox_widget)
+
+        # 账号名称
+        name_item = QTableWidgetItem(new_acc.account_name)
+        name_item.setData(Qt.UserRole, new_acc.account_id)
+        self.account_table.setItem(row, 1, name_item)
+
+        # 登录按钮
+        login_btn = QPushButton("登录")
+        login_btn.setProperty("account_id", new_acc.account_id)
+        login_btn.setProperty("account_name", new_acc.account_name)
+        login_btn.setProperty("platform", new_acc.platform)
+        login_btn.setProperty("profile_dir", new_acc.profile_dir)
+        login_btn.clicked.connect(self.on_login_btn_clicked)
+        self.account_table.setCellWidget(row, 2, login_btn)
+
+        # 添加到任务配置表
+        task_row = self.task_table.rowCount()
+        self.task_table.insertRow(task_row)
+
+        task_name_item = QTableWidgetItem(new_acc.account_name)
+        task_name_item.setData(Qt.UserRole, new_acc.account_id)
+        self.task_table.setItem(task_row, 0, task_name_item)
+
+        spin = QSpinBox()
+        spin.setRange(0, 100)
+        spin.setValue(0)
+        spin.setProperty("account_id", new_acc.account_id)
+        spin.valueChanged.connect(self.on_count_changed)
+        self.task_table.setCellWidget(task_row, 1, spin)
+
+        self.task_table.setItem(task_row, 2, QTableWidgetItem("待配置"))
+
+        self.log(f"✅ 已添加新账号: {new_acc.account_name}")
+
+        # 提示用户登录
+        QMessageBox.information(
+            self,
+            "添加成功",
+            f"已成功添加{platform_name}账号！\n\n请点击「登录」按钮完成账号登录。"
+        )
 
     def on_login_btn_clicked(self):
         """点击登录按钮"""

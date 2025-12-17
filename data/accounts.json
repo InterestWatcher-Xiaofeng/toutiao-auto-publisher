@@ -3,23 +3,26 @@
         {
             "id": "toutiao_1",
             "platform": "toutiao",
-            "name": "今日头条-账号1",
+            "name": "今日头条-流量情报局",
             "profile_dir": "toutiao_account1",
-            "enabled": true
+            "enabled": true,
+            "nickname": "流量情报局"
         },
         {
             "id": "toutiao_2",
             "platform": "toutiao",
-            "name": "今日头条-账号2",
+            "name": "今日头条-二哥流量全知道",
             "profile_dir": "toutiao_account2",
-            "enabled": true
+            "enabled": true,
+            "nickname": "二哥流量全知道"
         },
         {
             "id": "toutiao_3",
             "platform": "toutiao",
-            "name": "今日头条-账号3",
+            "name": "今日头条-流量大师兄",
             "profile_dir": "toutiao_account3",
-            "enabled": true
+            "enabled": true,
+            "nickname": "流量大师兄"
         },
         {
             "id": "sohu_1",
@@ -35,6 +38,22 @@
             "name": "搜狐-账号2",
             "profile_dir": "sohu_account2",
             "enabled": true
+        },
+        {
+            "id": "toutiao_4",
+            "platform": "toutiao",
+            "name": "今日头条-月月说流量",
+            "profile_dir": "toutiao_account4",
+            "enabled": true,
+            "nickname": "月月说流量"
+        },
+        {
+            "id": "toutiao_5",
+            "platform": "toutiao",
+            "name": "今日头条-于枫说运营",
+            "profile_dir": "toutiao_account5",
+            "enabled": true,
+            "nickname": "于枫说运营"
         }
     ]
 }

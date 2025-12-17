@@ -70,7 +70,7 @@ class Scheduler:
         """加载所有账号"""
         accounts = config.get_accounts()
         self.account_tasks = []
-        
+
         for acc in accounts:
             account_task = AccountTask(
                 account_id=acc['id'],
@@ -80,9 +80,34 @@ class Scheduler:
                 enabled=acc.get('enabled', True)
             )
             self.account_tasks.append(account_task)
-        
+
         return self.account_tasks
-    
+
+    def add_account(self, platform: str) -> AccountTask:
+        """添加新账号
+
+        Args:
+            platform: 平台名称 ('toutiao' 或 'sohu')
+
+        Returns:
+            新创建的AccountTask对象
+        """
+        # 调用config添加账号
+        new_acc = config.add_account(platform)
+
+        # 创建AccountTask并添加到列表
+        account_task = AccountTask(
+            account_id=new_acc['id'],
+            account_name=new_acc['name'],
+            platform=new_acc['platform'],
+            profile_dir=new_acc['profile_dir'],
+            enabled=new_acc.get('enabled', True)
+        )
+        self.account_tasks.append(account_task)
+
+        logger.info(f"已添加新账号: {account_task.account_name}")
+        return account_task
+
     def load_articles(self, file_path: str) -> bool:
         """加载文章"""
         return self.excel_reader.load(file_path)
