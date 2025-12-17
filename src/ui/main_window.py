@@ -237,6 +237,32 @@ class MainWindow(QMainWindow):
         group = QGroupBox("发布配置")
         layout = QVBoxLayout(group)
 
+        # 并发数配置区域
+        concurrent_layout = QHBoxLayout()
+        concurrent_label = QLabel("⚡ 并发账号数:")
+        concurrent_label.setStyleSheet("font-weight: bold;")
+        concurrent_layout.addWidget(concurrent_label)
+
+        self.concurrent_spin = QSpinBox()
+        self.concurrent_spin.setRange(1, 10)
+        self.concurrent_spin.setValue(3)  # 默认3个账号同时发布
+        self.concurrent_spin.setToolTip("同时运行的账号数量（1-10）\n数值越大效率越高，但对电脑性能要求越高")
+        self.concurrent_spin.valueChanged.connect(self.on_concurrent_changed)
+        concurrent_layout.addWidget(self.concurrent_spin)
+
+        concurrent_hint = QLabel("（同时发布的账号数）")
+        concurrent_hint.setStyleSheet("color: gray;")
+        concurrent_layout.addWidget(concurrent_hint)
+        concurrent_layout.addStretch()
+
+        layout.addLayout(concurrent_layout)
+
+        # 分隔线
+        line = QFrame()
+        line.setFrameShape(QFrame.HLine)
+        line.setFrameShadow(QFrame.Sunken)
+        layout.addWidget(line)
+
         # 任务配置表格
         self.task_table = QTableWidget()
         self.task_table.setColumnCount(3)
@@ -245,6 +271,11 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.task_table)
 
         return group
+
+    def on_concurrent_changed(self, value: int):
+        """并发数变化"""
+        scheduler.set_max_concurrent(value)
+        self.log(f"并发账号数设置为: {value}")
 
     def _create_content_panel(self) -> QGroupBox:
         """创建内容预览面板"""

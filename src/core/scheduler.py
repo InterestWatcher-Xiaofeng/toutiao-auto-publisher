@@ -1,6 +1,6 @@
 """
 任务调度器
-管理发布任务的执行
+管理发布任务的执行（支持并行发布）
 """
 
 import asyncio
@@ -50,8 +50,8 @@ class AccountTask:
 
 
 class Scheduler:
-    """任务调度器"""
-    
+    """任务调度器（支持并行发布）"""
+
     def __init__(self):
         self.excel_reader = ExcelReader()
         self.tasks: List[PublishTask] = []
@@ -59,12 +59,20 @@ class Scheduler:
         self._running = False
         self._cancelled = False
         self._adapters: Dict[str, BaseAdapter] = {}
-        
+
+        # 并行配置
+        self.max_concurrent: int = 3  # 默认最大并发数
+
         # 回调函数
         self.on_task_start: Optional[Callable[[PublishTask], None]] = None
         self.on_task_complete: Optional[Callable[[PublishTask], None]] = None
         self.on_log: Optional[Callable[[str], None]] = None
         self.on_progress: Optional[Callable[[int, int], None]] = None
+
+        # 并行执行时的进度跟踪
+        self._completed_count = 0
+        self._total_count = 0
+        self._progress_lock = asyncio.Lock() if asyncio.get_event_loop().is_running() else None
     
     def load_accounts(self) -> List[AccountTask]:
         """加载所有账号"""
@@ -177,103 +185,150 @@ class Scheduler:
         if self.on_log:
             self.on_log(message)
 
+    def set_max_concurrent(self, count: int):
+        """设置最大并发数"""
+        self.max_concurrent = max(1, min(count, 10))  # 限制1-10
+        self._log(f"设置并发数: {self.max_concurrent}")
+
     async def run(self):
-        """运行所有任务"""
+        """运行所有任务（并行模式）"""
         if self._running:
             logger.warning("调度器已在运行中")
             return
 
         self._running = True
         self._cancelled = False
-        total = len(self.tasks)
-        completed = 0
+        self._completed_count = 0
+        self._total_count = len(self.tasks)
 
-        self._log(f"开始执行 {total} 个发布任务...")
+        self._log(f"开始执行 {self._total_count} 个发布任务（并发数: {self.max_concurrent}）...")
 
+        # 按账号分组任务
+        account_task_groups: Dict[str, List[PublishTask]] = {}
         for task in self.tasks:
-            if self._cancelled:
-                self._log("任务已取消")
-                break
+            if task.account_id not in account_task_groups:
+                account_task_groups[task.account_id] = []
+            account_task_groups[task.account_id].append(task)
 
-            task.status = TaskStatus.RUNNING
-            if self.on_task_start:
-                self.on_task_start(task)
+        self._log(f"共 {len(account_task_groups)} 个账号参与发布")
 
-            self._log(f"正在发布: [{task.account_name}] {task.article.title[:30]}...")
+        # 创建信号量控制并发数
+        semaphore = asyncio.Semaphore(self.max_concurrent)
 
-            try:
-                # 再次检查取消状态
-                if self._cancelled:
-                    self._log("任务已取消")
-                    break
+        # 为每个账号创建并行任务
+        account_coroutines = []
+        for account_id, tasks in account_task_groups.items():
+            coro = self._run_account_tasks(account_id, tasks, semaphore)
+            account_coroutines.append(coro)
 
-                adapter = self._get_adapter(task)
-
-                # 检查登录状态
-                if self._cancelled:
-                    break
-                is_logged_in = await adapter.check_login_status()
-
-                if self._cancelled:
-                    break
-
-                if not is_logged_in:
-                    self._log(f"[{task.account_name}] 需要登录，请在浏览器中手动登录...")
-                    login_success = await adapter.wait_for_login()
-                    if self._cancelled:
-                        break
-                    if not login_success:
-                        task.status = TaskStatus.FAILED
-                        task.result = {'success': False, 'message': '登录超时'}
-                        self._log(f"[{task.account_name}] 登录失败，跳过此任务")
-                        continue
-
-                # 再次检查取消状态
-                if self._cancelled:
-                    break
-
-                # 发布文章
-                result = await adapter.publish_article(task.article)
-                task.result = result
-
-                if result['success']:
-                    task.status = TaskStatus.SUCCESS
-                    self.excel_reader.mark_as_published(task.article, "success")
-                    self._log(f"✅ 发布成功: {task.article.title[:30]}...")
-                else:
-                    task.status = TaskStatus.FAILED
-                    self._log(f"❌ 发布失败: {result['message']}")
-
-            except Exception as e:
-                task.status = TaskStatus.FAILED
-                task.result = {'success': False, 'message': str(e)}
-                self._log(f"❌ 发布异常: {e}")
-
-            completed += 1
-            if self.on_progress:
-                self.on_progress(completed, total)
-
-            if self.on_task_complete:
-                self.on_task_complete(task)
-
-            # 任务间随机延迟
-            if completed < total and not self._cancelled:
-                import random
-                delay = random.uniform(3, 8)
-                self._log(f"等待 {delay:.1f} 秒后继续...")
-                await asyncio.sleep(delay)
+        # 并行执行所有账号的任务
+        await asyncio.gather(*account_coroutines, return_exceptions=True)
 
         self._running = False
 
         # 统计结果
         success_count = sum(1 for t in self.tasks if t.status == TaskStatus.SUCCESS)
         failed_count = sum(1 for t in self.tasks if t.status == TaskStatus.FAILED)
-        self._log(f"发布完成! 成功: {success_count}, 失败: {failed_count}")
-
-        # 注意：不在这里关闭浏览器，让用户可以查看结果
-        # 浏览器将在程序退出时自动关闭
+        self._log(f"🎉 发布完成! 成功: {success_count}, 失败: {failed_count}")
         self._log("所有任务已完成!")
         self._adapters.clear()
+
+    async def _run_account_tasks(self, account_id: str, tasks: List[PublishTask], semaphore: asyncio.Semaphore):
+        """运行单个账号的所有任务"""
+        async with semaphore:
+            if self._cancelled:
+                return
+
+            account_name = tasks[0].account_name if tasks else account_id
+            self._log(f"🚀 [{account_name}] 开始发布 {len(tasks)} 篇文章...")
+
+            try:
+                # 获取适配器
+                adapter = self._get_adapter(tasks[0])
+
+                # 检查登录状态
+                if self._cancelled:
+                    return
+
+                is_logged_in = await adapter.check_login_status()
+
+                if not is_logged_in:
+                    self._log(f"[{account_name}] 需要登录，请在浏览器中手动登录...")
+                    login_success = await adapter.wait_for_login()
+                    if self._cancelled:
+                        return
+                    if not login_success:
+                        for task in tasks:
+                            task.status = TaskStatus.FAILED
+                            task.result = {'success': False, 'message': '登录超时'}
+                            await self._update_progress(task)
+                        self._log(f"❌ [{account_name}] 登录失败，跳过该账号所有任务")
+                        return
+
+                # 依次发布该账号的文章
+                for task in tasks:
+                    if self._cancelled:
+                        break
+
+                    await self._execute_single_task(task, adapter)
+
+            except Exception as e:
+                self._log(f"❌ [{account_name}] 账号执行异常: {e}")
+                for task in tasks:
+                    if task.status == TaskStatus.PENDING:
+                        task.status = TaskStatus.FAILED
+                        task.result = {'success': False, 'message': str(e)}
+                        await self._update_progress(task)
+
+            self._log(f"✅ [{account_name}] 该账号任务完成")
+
+    async def _execute_single_task(self, task: PublishTask, adapter: BaseAdapter):
+        """执行单个发布任务"""
+        import random
+
+        task.status = TaskStatus.RUNNING
+        if self.on_task_start:
+            self.on_task_start(task)
+
+        self._log(f"📝 [{task.account_name}] 正在发布: {task.article.title[:30]}...")
+
+        try:
+            if self._cancelled:
+                return
+
+            # 发布文章
+            result = await adapter.publish_article(task.article)
+            task.result = result
+
+            if result['success']:
+                task.status = TaskStatus.SUCCESS
+                self.excel_reader.mark_as_published(task.article, "success")
+                self._log(f"✅ [{task.account_name}] 发布成功: {task.article.title[:30]}...")
+            else:
+                task.status = TaskStatus.FAILED
+                self._log(f"❌ [{task.account_name}] 发布失败: {result['message']}")
+
+        except Exception as e:
+            task.status = TaskStatus.FAILED
+            task.result = {'success': False, 'message': str(e)}
+            self._log(f"❌ [{task.account_name}] 发布异常: {e}")
+
+        await self._update_progress(task)
+
+        # 任务间随机延迟
+        if not self._cancelled:
+            delay = random.uniform(2, 5)
+            await asyncio.sleep(delay)
+
+    async def _update_progress(self, task: PublishTask):
+        """更新进度（线程安全）"""
+        self._completed_count += 1
+
+        if self.on_progress:
+            self.on_progress(self._completed_count, self._total_count)
+
+        if self.on_task_complete:
+            self.on_task_complete(task)
 
     def cancel(self):
         """取消任务"""
