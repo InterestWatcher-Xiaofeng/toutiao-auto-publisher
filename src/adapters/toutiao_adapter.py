@@ -104,14 +104,21 @@ class ToutiaoAdapter(BaseAdapter):
 
             # 访问首页获取昵称
             await page.goto(self.HOME_URL, wait_until="domcontentloaded", timeout=15000)
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
 
-            # 尝试多个可能的选择器获取昵称
+            # 尝试多个可能的选择器获取昵称（按优先级排序）
             selectors = [
-                ".user-info-name",  # 用户信息区域的名称
-                ".header-user-name",  # 头部用户名
-                ".account-name",  # 账号名称
-                ".mp-header-user-info .name",  # 头条创作者后台用户名
+                # 用户提供的准确选择器
+                "#masterRoot > div > div.garr-header > div > div > div.user-panel > div.information > a > span > div > div > div.auth-avator-name",
+                # 简化版选择器
+                ".auth-avator-name",
+                ".user-panel .auth-avator-name",
+                ".information .auth-avator-name",
+                # 备用选择器
+                ".user-info-name",
+                ".header-user-name",
+                ".account-name",
+                ".mp-header-user-info .name",
             ]
 
             for selector in selectors:
@@ -121,7 +128,7 @@ class ToutiaoAdapter(BaseAdapter):
                         nickname = await element.text_content()
                         if nickname and nickname.strip():
                             nickname = nickname.strip()
-                            logger.info(f"[{self.account_name}] 获取到昵称: {nickname}")
+                            logger.info(f"[{self.account_name}] 获取到昵称: {nickname} (选择器: {selector})")
                             return nickname
                 except Exception:
                     continue
@@ -230,44 +237,73 @@ class ToutiaoAdapter(BaseAdapter):
             except Exception:
                 pass
 
-            # 4. 填写标题
+            # 4. 填写标题（模拟人工逐字输入）
             logger.info(f"[{self.account_name}] 正在填写标题...")
             try:
-                await page.fill(ToutiaoSelectors.TITLE_INPUT, title)
-                await self.random_delay(1, 2)
+                # 清空现有内容
+                await page.click(ToutiaoSelectors.TITLE_INPUT, force=True)
+                await self.random_delay(0.3, 0.5)
+                await page.keyboard.press("Control+a")
+                await page.keyboard.press("Backspace")
+                await self.random_delay(0.3, 0.5)
+
+                # 逐字输入标题，每字间隔30-80ms模拟打字
+                await page.type(ToutiaoSelectors.TITLE_INPUT, title, delay=50)
+                logger.info(f"[{self.account_name}] ✓ 标题填写完成")
+                await self.random_delay(2, 5)  # 操作间隔2-5秒
             except Exception as e:
                 logger.error(f"[{self.account_name}] 填写标题失败: {e}")
                 return {"success": False, "message": f"填写标题失败: {e}"}
 
-            # 5. 填写正文
+            # 5. 填写正文（模拟人工逐段输入）
             logger.info(f"[{self.account_name}] 正在填写正文...")
             try:
                 # 点击正文编辑器
                 await page.click(ToutiaoSelectors.CONTENT_EDITOR, force=True)
                 await self.random_delay(0.5, 1)
-                # 填写正文内容
-                await page.fill(ToutiaoSelectors.CONTENT_EDITOR, content)
-                await self.random_delay(1, 2)
+
+                # 分段输入正文，模拟人工写作
+                paragraphs = content.split('\n')
+                for i, para in enumerate(paragraphs):
+                    if para.strip():  # 跳过空行
+                        # 逐字输入每段内容
+                        await page.type(ToutiaoSelectors.CONTENT_EDITOR, para, delay=30)
+                        await self.random_delay(0.3, 0.8)
+                    # 换行
+                    await page.keyboard.press("Enter")
+                    await self.random_delay(0.2, 0.5)
+
+                    # 每5段休息一下，模拟思考
+                    if (i + 1) % 5 == 0:
+                        await self.random_delay(1, 2)
+
+                logger.info(f"[{self.account_name}] ✓ 正文填写完成 (共{len(paragraphs)}段)")
+                await self.random_delay(2, 5)  # 操作间隔2-5秒
             except Exception as e:
                 logger.error(f"[{self.account_name}] 填写正文失败: {e}")
                 return {"success": False, "message": f"填写正文失败: {e}"}
 
             # 6. 选择封面（从素材库）
             logger.info(f"[{self.account_name}] 正在选择封面...")
+            await self.random_delay(2, 5)  # 操作间隔
             try:
                 await self._select_cover_from_material(page)
+                await self.random_delay(2, 5)  # 封面选择后等待
             except Exception as e:
                 logger.warning(f"[{self.account_name}] 选择封面失败（继续发布）: {e}")
                 # 封面选择失败不阻止发布
 
             # 7. 点击发布按钮
             logger.info(f"[{self.account_name}] 正在点击发布按钮...")
+            await self.random_delay(2, 5)  # 操作间隔
             try:
                 publish_btn = await page.wait_for_selector(ToutiaoSelectors.PUBLISH_BTN, timeout=10000)
                 if publish_btn:
+                    await publish_btn.scroll_into_view_if_needed()
+                    await self.random_delay(0.5, 1)
                     await publish_btn.click()
                     logger.info(f"[{self.account_name}] ✓ 已点击发布按钮")
-                    await self.random_delay(2, 3)
+                    await self.random_delay(2, 5)  # 操作间隔
                 else:
                     logger.error(f"[{self.account_name}] 未找到发布按钮")
                     return {"success": False, "message": "未找到发布按钮"}
@@ -284,13 +320,13 @@ class ToutiaoAdapter(BaseAdapter):
                 if confirm_btn:
                     await confirm_btn.click()
                     logger.info(f"[{self.account_name}] 已点击确认发布")
-                    await self.random_delay(2, 3)
+                    await self.random_delay(2, 5)  # 操作间隔
             except Exception:
                 # 没有确认弹窗也正常
                 pass
 
             # 9. 等待发布完成
-            await asyncio.sleep(3)
+            await self.random_delay(3, 5)
 
             logger.info(f"[{self.account_name}] ✅ 文章发布完成: {title[:30]}...")
             return {"success": True, "message": "发布成功"}
@@ -311,7 +347,7 @@ class ToutiaoAdapter(BaseAdapter):
             if cover_area:
                 await cover_area.click()
                 logger.info(f"[{self.account_name}] ✓ 已点击封面选择区域")
-                await self.random_delay(1, 2)
+                await self.random_delay(2, 5)  # 操作间隔
             else:
                 logger.warning(f"[{self.account_name}] 未找到封面选择区域")
                 return
@@ -329,7 +365,7 @@ class ToutiaoAdapter(BaseAdapter):
             if material_tab:
                 await material_tab.click()
                 logger.info(f"[{self.account_name}] ✓ 已点击'我的素材'标签")
-                await self.random_delay(1, 2)
+                await self.random_delay(2, 5)  # 操作间隔
         except Exception as e:
             logger.warning(f"[{self.account_name}] 点击'我的素材'标签失败: {e}")
 
@@ -341,9 +377,11 @@ class ToutiaoAdapter(BaseAdapter):
                 timeout=5000
             )
             if first_image:
+                await first_image.scroll_into_view_if_needed()
+                await self.random_delay(0.5, 1)
                 await first_image.click()
                 logger.info(f"[{self.account_name}] ✓ 已选择第一张图片")
-                await self.random_delay(0.5, 1)
+                await self.random_delay(2, 5)  # 操作间隔
             else:
                 logger.warning(f"[{self.account_name}] 未找到素材图片")
                 return
@@ -361,6 +399,6 @@ class ToutiaoAdapter(BaseAdapter):
             if confirm_btn:
                 await confirm_btn.click()
                 logger.info(f"[{self.account_name}] ✓ 已点击确定按钮，封面选择完成")
-                await self.random_delay(1, 2)
+                await self.random_delay(2, 5)  # 操作间隔
         except Exception as e:
             logger.warning(f"[{self.account_name}] 点击确定按钮失败: {e}")
