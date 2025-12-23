@@ -243,6 +243,59 @@ class BrowserManager:
         """清理浏览器资源（登录完成后调用）"""
         await self.close_all()
 
+    async def open_standalone_browser(self, account_id: str, profile_dir: str, start_url: str = None):
+        """打开独立浏览器（不受程序管理，用户可以一直使用）
+
+        Args:
+            account_id: 账号ID
+            profile_dir: 配置文件目录名
+            start_url: 启动时打开的URL（可选）
+
+        Returns:
+            打开的Page对象（仅用于初始导航，之后不再管理）
+        """
+        # 创建新的playwright实例（独立于主程序）
+        standalone_playwright = await async_playwright().start()
+
+        # 启动独立浏览器
+        standalone_browser = await standalone_playwright.chromium.launch(
+            headless=False,
+            args=[
+                '--disable-blink-features=AutomationControlled',
+                '--no-sandbox',
+            ]
+        )
+
+        # 创建配置文件目录
+        storage_path = os.path.join(BROWSER_PROFILES_DIR, profile_dir)
+        os.makedirs(storage_path, exist_ok=True)
+
+        storage_state_file = os.path.join(storage_path, 'storage_state.json')
+
+        # 创建上下文选项
+        context_options = {
+            'viewport': {'width': 1280, 'height': 800},
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        }
+
+        # 如果存在存储状态文件，加载它
+        if os.path.exists(storage_state_file):
+            context_options['storage_state'] = storage_state_file
+            logger.info(f"独立浏览器加载登录状态: {account_id}")
+
+        context = await standalone_browser.new_context(**context_options)
+        page = await context.new_page()
+
+        # 如果指定了URL，导航到该页面
+        if start_url:
+            await page.goto(start_url, wait_until='domcontentloaded')
+
+        logger.info(f"已打开独立浏览器: {account_id}")
+
+        # 注意：不保存这个浏览器的引用，让它独立运行
+        # 用户手动关闭浏览器时，资源会自动释放
+        return page
+
 
 # 全局浏览器管理器实例
 browser_manager = BrowserManager()

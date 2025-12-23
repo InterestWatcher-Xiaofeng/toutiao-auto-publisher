@@ -66,7 +66,7 @@ class Config:
         return ""
 
     def update_account_nickname(self, account_id: str, nickname: str):
-        """更新账号昵称并保存到配置文件
+        """更新账号昵称并保存到配置文件（登录后自动获取的昵称）
 
         Args:
             account_id: 账号ID
@@ -76,7 +76,8 @@ class Config:
             if acc['id'] == account_id:
                 # 获取平台前缀
                 platform = acc.get('platform', '')
-                platform_prefix = "今日头条" if platform == "toutiao" else "搜狐"
+                platform_prefixes = {"toutiao": "今日头条", "sohu": "搜狐", "baijiahao": "百家号"}
+                platform_prefix = platform_prefixes.get(platform, platform)
 
                 # 更新名称
                 acc['name'] = f"{platform_prefix}-{nickname}"
@@ -86,11 +87,47 @@ class Config:
                 self.save_accounts()
                 break
 
+    def update_account_name(self, account_id: str, new_name: str):
+        """更新账号显示名称（用户手动修改的完整名称）
+
+        Args:
+            account_id: 账号ID
+            new_name: 新的完整显示名称
+        """
+        for acc in self._accounts:
+            if acc['id'] == account_id:
+                acc['name'] = new_name
+                self.save_accounts()
+                break
+
+    def reorder_accounts(self, new_order: list):
+        """重新排序账号列表
+
+        Args:
+            new_order: 账号ID的新顺序列表
+        """
+        # 创建ID到账号的映射
+        account_map = {acc['id']: acc for acc in self._accounts}
+
+        # 按新顺序重建列表
+        reordered = []
+        for account_id in new_order:
+            if account_id in account_map:
+                reordered.append(account_map[account_id])
+
+        # 添加不在新顺序中的账号（防止丢失）
+        for acc in self._accounts:
+            if acc['id'] not in new_order:
+                reordered.append(acc)
+
+        self._accounts = reordered
+        self.save_accounts()
+
     def add_account(self, platform: str) -> Dict[str, Any]:
         """添加新账号
 
         Args:
-            platform: 平台名称 ('toutiao' 或 'sohu')
+            platform: 平台名称 ('toutiao', 'sohu' 或 'baijiahao')
 
         Returns:
             新创建的账号信息字典
@@ -111,7 +148,8 @@ class Config:
             profile_dir = f"{platform}_account{new_index}"
 
         # 生成账号名称
-        platform_prefix = "今日头条" if platform == "toutiao" else "搜狐"
+        platform_prefixes = {"toutiao": "今日头条", "sohu": "搜狐", "baijiahao": "百家号"}
+        platform_prefix = platform_prefixes.get(platform, platform)
         account_name = f"{platform_prefix}-账号{new_index}"
 
         # 创建浏览器配置目录
@@ -132,6 +170,38 @@ class Config:
         self.save_accounts()
 
         return new_account
+
+    def delete_account(self, account_id: str) -> bool:
+        """删除账号
+
+        Args:
+            account_id: 账号ID
+
+        Returns:
+            是否删除成功
+        """
+        import shutil
+
+        # 查找账号
+        account = self.get_account_by_id(account_id)
+        if not account:
+            return False
+
+        # 从列表中移除
+        self._accounts = [acc for acc in self._accounts if acc['id'] != account_id]
+        self.save_accounts()
+
+        # 删除浏览器配置目录
+        profile_dir = account.get('profile_dir', '')
+        if profile_dir:
+            full_profile_dir = os.path.join(BROWSER_PROFILES_DIR, profile_dir)
+            if os.path.exists(full_profile_dir):
+                try:
+                    shutil.rmtree(full_profile_dir)
+                except Exception:
+                    pass  # 删除失败不影响账号删除
+
+        return True
 
 
 # 全局配置实例

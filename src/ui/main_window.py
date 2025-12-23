@@ -43,6 +43,8 @@ class AsyncWorker(QThread):
                 self._run_publish_task()
             elif self._task_type == "login":
                 self._run_login_task()
+            elif self._task_type == "open_browser":
+                self._run_open_browser_task()
 
             self.finished.emit()
         except Exception as e:
@@ -70,6 +72,7 @@ class AsyncWorker(QThread):
         """运行登录任务"""
         from src.adapters.toutiao_adapter import ToutiaoAdapter
         from src.adapters.sohu_adapter import SohuAdapter
+        from src.adapters.baijiahao_adapter import BaijiahaoAdapter
         from src.browser.browser_manager import browser_manager
 
         account_id = self._kwargs.get('account_id')
@@ -79,6 +82,8 @@ class AsyncWorker(QThread):
 
         if platform == 'toutiao':
             adapter = ToutiaoAdapter(account_id, profile_dir, account_name)
+        elif platform == 'baijiahao':
+            adapter = BaijiahaoAdapter(account_id, profile_dir, account_name)
         else:
             adapter = SohuAdapter(account_id, profile_dir, account_name)
 
@@ -98,6 +103,19 @@ class AsyncWorker(QThread):
 
         self._kwargs['success'] = success
         self._kwargs['nickname'] = nickname
+
+    def _run_open_browser_task(self):
+        """运行打开浏览器任务"""
+        from src.browser.browser_manager import browser_manager
+
+        account_id = self._kwargs.get('account_id')
+        profile_dir = self._kwargs.get('profile_dir')
+        start_url = self._kwargs.get('start_url')
+
+        # 打开独立浏览器（不受程序管理）
+        self._loop.run_until_complete(
+            browser_manager.open_standalone_browser(account_id, profile_dir, start_url)
+        )
 
 
 class MainWindow(QMainWindow):
@@ -193,18 +211,38 @@ class MainWindow(QMainWindow):
     
     def _create_account_panel(self) -> QGroupBox:
         """创建账号面板"""
-        group = QGroupBox("账号列表 (点击登录按钮进行登录)")
+        group = QGroupBox("账号列表 (双击名称可编辑，拖拽可排序)")
         layout = QVBoxLayout(group)
 
-        # 账号表格（带登录按钮）
+        # 账号表格（带登录按钮和操作按钮）
         self.account_table = QTableWidget()
-        self.account_table.setColumnCount(3)
-        self.account_table.setHorizontalHeaderLabels(["选择", "账号名称", "操作"])
+        self.account_table.setColumnCount(4)
+        self.account_table.setHorizontalHeaderLabels(["选择", "账号名称", "登录", "操作"])
         self.account_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
         self.account_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.account_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
+        self.account_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Fixed)
         self.account_table.setColumnWidth(0, 50)
         self.account_table.setColumnWidth(2, 80)
+        self.account_table.setColumnWidth(3, 100)
+
+        # 启用拖拽排序
+        self.account_table.setDragEnabled(True)
+        self.account_table.setAcceptDrops(True)
+        self.account_table.setDragDropMode(QTableWidget.InternalMove)
+        self.account_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.account_table.setDefaultDropAction(Qt.MoveAction)
+        self.account_table.verticalHeader().setSectionsMovable(True)
+        self.account_table.verticalHeader().setDragEnabled(True)
+        self.account_table.verticalHeader().setDragDropMode(QHeaderView.InternalMove)
+
+        # 连接拖拽完成信号
+        self.account_table.verticalHeader().sectionMoved.connect(self.on_account_row_moved)
+
+        # 连接双击编辑信号
+        self.account_table.cellDoubleClicked.connect(self.on_account_cell_double_clicked)
+        self.account_table.cellChanged.connect(self.on_account_cell_changed)
+
         layout.addWidget(self.account_table)
 
         # 添加账号按钮区域
@@ -224,6 +262,13 @@ class MainWindow(QMainWindow):
         self.add_sohu_btn.clicked.connect(lambda: self.on_add_account_clicked("sohu"))
         add_btn_layout.addWidget(self.add_sohu_btn)
 
+        # 添加百家号账号按钮
+        self.add_baijiahao_btn = QPushButton("➕ 增加百家号账号")
+        self.add_baijiahao_btn.setMinimumHeight(35)
+        self.add_baijiahao_btn.setStyleSheet("background-color: #E91E63; color: white;")
+        self.add_baijiahao_btn.clicked.connect(lambda: self.on_add_account_clicked("baijiahao"))
+        add_btn_layout.addWidget(self.add_baijiahao_btn)
+
         layout.addLayout(add_btn_layout)
 
         # 保留旧的list用于兼容
@@ -237,31 +282,10 @@ class MainWindow(QMainWindow):
         group = QGroupBox("发布配置")
         layout = QVBoxLayout(group)
 
-        # 并发数配置区域
-        concurrent_layout = QHBoxLayout()
-        concurrent_label = QLabel("⚡ 并发账号数:")
-        concurrent_label.setStyleSheet("font-weight: bold;")
-        concurrent_layout.addWidget(concurrent_label)
-
-        self.concurrent_spin = QSpinBox()
-        self.concurrent_spin.setRange(1, 10)
-        self.concurrent_spin.setValue(3)  # 默认3个账号同时发布
-        self.concurrent_spin.setToolTip("同时运行的账号数量（1-10）\n数值越大效率越高，但对电脑性能要求越高")
-        self.concurrent_spin.valueChanged.connect(self.on_concurrent_changed)
-        concurrent_layout.addWidget(self.concurrent_spin)
-
-        concurrent_hint = QLabel("（同时发布的账号数）")
-        concurrent_hint.setStyleSheet("color: gray;")
-        concurrent_layout.addWidget(concurrent_hint)
-        concurrent_layout.addStretch()
-
-        layout.addLayout(concurrent_layout)
-
-        # 分隔线
-        line = QFrame()
-        line.setFrameShape(QFrame.HLine)
-        line.setFrameShadow(QFrame.Sunken)
-        layout.addWidget(line)
+        # 发布模式提示
+        mode_label = QLabel("📝 串行发布模式（逐个账号依次执行）")
+        mode_label.setStyleSheet("color: #666; font-style: italic;")
+        layout.addWidget(mode_label)
 
         # 任务配置表格
         self.task_table = QTableWidget()
@@ -272,10 +296,7 @@ class MainWindow(QMainWindow):
 
         return group
 
-    def on_concurrent_changed(self, value: int):
-        """并发数变化"""
-        scheduler.set_max_concurrent(value)
-        self.log(f"并发账号数设置为: {value}")
+
 
     def _create_content_panel(self) -> QGroupBox:
         """创建内容预览面板"""
@@ -312,48 +333,84 @@ class MainWindow(QMainWindow):
         self.task_table.setRowCount(len(accounts))
 
         for i, acc in enumerate(accounts):
-            # 添加到账号表格
-            # 选择框
-            checkbox = QCheckBox()
-            checkbox.setChecked(acc.enabled)
-            checkbox.setProperty("account_id", acc.account_id)
-            checkbox.stateChanged.connect(self.on_account_checkbox_changed)
-            checkbox_widget = QWidget()
-            checkbox_layout = QHBoxLayout(checkbox_widget)
-            checkbox_layout.addWidget(checkbox)
-            checkbox_layout.setAlignment(Qt.AlignCenter)
-            checkbox_layout.setContentsMargins(0, 0, 0, 0)
-            self.account_table.setCellWidget(i, 0, checkbox_widget)
-
-            # 账号名称
-            name_item = QTableWidgetItem(acc.account_name)
-            name_item.setData(Qt.UserRole, acc.account_id)
-            self.account_table.setItem(i, 1, name_item)
-
-            # 登录按钮
-            login_btn = QPushButton("登录")
-            login_btn.setProperty("account_id", acc.account_id)
-            login_btn.setProperty("account_name", acc.account_name)
-            login_btn.setProperty("platform", acc.platform)
-            login_btn.setProperty("profile_dir", acc.profile_dir)
-            login_btn.clicked.connect(self.on_login_btn_clicked)
-            self.account_table.setCellWidget(i, 2, login_btn)
-
-            # 添加到任务配置表
-            task_name_item = QTableWidgetItem(acc.account_name)
-            task_name_item.setData(Qt.UserRole, acc.account_id)  # 保存account_id以便后续更新
-            self.task_table.setItem(i, 0, task_name_item)
-
-            spin = QSpinBox()
-            spin.setRange(0, 100)
-            spin.setValue(0)
-            spin.setProperty("account_id", acc.account_id)
-            spin.valueChanged.connect(self.on_count_changed)
-            self.task_table.setCellWidget(i, 1, spin)
-
-            self.task_table.setItem(i, 2, QTableWidgetItem("待配置"))
+            self._add_account_row(i, acc)
 
         self.log("已加载 {} 个账号".format(len(accounts)))
+
+    def _add_account_row(self, row: int, acc):
+        """添加账号行到表格
+
+        Args:
+            row: 行号
+            acc: AccountTask对象
+        """
+        # 添加到账号表格
+        # 选择框
+        checkbox = QCheckBox()
+        checkbox.setChecked(acc.enabled)
+        checkbox.setProperty("account_id", acc.account_id)
+        checkbox.stateChanged.connect(self.on_account_checkbox_changed)
+        checkbox_widget = QWidget()
+        checkbox_layout = QHBoxLayout(checkbox_widget)
+        checkbox_layout.addWidget(checkbox)
+        checkbox_layout.setAlignment(Qt.AlignCenter)
+        checkbox_layout.setContentsMargins(0, 0, 0, 0)
+        self.account_table.setCellWidget(row, 0, checkbox_widget)
+
+        # 账号名称
+        name_item = QTableWidgetItem(acc.account_name)
+        name_item.setData(Qt.UserRole, acc.account_id)
+        self.account_table.setItem(row, 1, name_item)
+
+        # 登录按钮
+        login_btn = QPushButton("登录")
+        login_btn.setProperty("account_id", acc.account_id)
+        login_btn.setProperty("account_name", acc.account_name)
+        login_btn.setProperty("platform", acc.platform)
+        login_btn.setProperty("profile_dir", acc.profile_dir)
+        login_btn.clicked.connect(self.on_login_btn_clicked)
+        self.account_table.setCellWidget(row, 2, login_btn)
+
+        # 操作按钮（打开浏览器 + 删除）
+        ops_widget = QWidget()
+        ops_layout = QHBoxLayout(ops_widget)
+        ops_layout.setContentsMargins(2, 2, 2, 2)
+        ops_layout.setSpacing(2)
+
+        # 打开浏览器按钮
+        open_btn = QPushButton("🌐")
+        open_btn.setToolTip("打开浏览器")
+        open_btn.setFixedWidth(35)
+        open_btn.setProperty("account_id", acc.account_id)
+        open_btn.setProperty("platform", acc.platform)
+        open_btn.setProperty("profile_dir", acc.profile_dir)
+        open_btn.clicked.connect(self.on_open_browser_clicked)
+        ops_layout.addWidget(open_btn)
+
+        # 删除按钮
+        delete_btn = QPushButton("🗑️")
+        delete_btn.setToolTip("删除账号")
+        delete_btn.setFixedWidth(35)
+        delete_btn.setProperty("account_id", acc.account_id)
+        delete_btn.setProperty("account_name", acc.account_name)
+        delete_btn.clicked.connect(self.on_delete_account_clicked)
+        ops_layout.addWidget(delete_btn)
+
+        self.account_table.setCellWidget(row, 3, ops_widget)
+
+        # 添加到任务配置表
+        task_name_item = QTableWidgetItem(acc.account_name)
+        task_name_item.setData(Qt.UserRole, acc.account_id)
+        self.task_table.setItem(row, 0, task_name_item)
+
+        spin = QSpinBox()
+        spin.setRange(0, 100)
+        spin.setValue(0)
+        spin.setProperty("account_id", acc.account_id)
+        spin.valueChanged.connect(self.on_count_changed)
+        self.task_table.setCellWidget(row, 1, spin)
+
+        self.task_table.setItem(row, 2, QTableWidgetItem("待配置"))
 
     def on_account_checkbox_changed(self, state):
         """账号复选框状态变化"""
@@ -370,9 +427,14 @@ class MainWindow(QMainWindow):
         """点击添加账号按钮
 
         Args:
-            platform: 平台名称 ('toutiao' 或 'sohu')
+            platform: 平台名称 ('toutiao', 'sohu' 或 'baijiahao')
         """
-        platform_name = "今日头条" if platform == "toutiao" else "搜狐"
+        platform_names = {
+            "toutiao": "今日头条",
+            "sohu": "搜狐",
+            "baijiahao": "百家号"
+        }
+        platform_name = platform_names.get(platform, platform)
 
         # 调用scheduler添加账号
         new_acc = scheduler.add_account(platform)
@@ -380,49 +442,10 @@ class MainWindow(QMainWindow):
         # 添加到账号表格
         row = self.account_table.rowCount()
         self.account_table.insertRow(row)
+        self.task_table.insertRow(row)
 
-        # 选择框
-        checkbox = QCheckBox()
-        checkbox.setChecked(True)
-        checkbox.setProperty("account_id", new_acc.account_id)
-        checkbox.stateChanged.connect(self.on_account_checkbox_changed)
-        checkbox_widget = QWidget()
-        checkbox_layout = QHBoxLayout(checkbox_widget)
-        checkbox_layout.addWidget(checkbox)
-        checkbox_layout.setAlignment(Qt.AlignCenter)
-        checkbox_layout.setContentsMargins(0, 0, 0, 0)
-        self.account_table.setCellWidget(row, 0, checkbox_widget)
-
-        # 账号名称
-        name_item = QTableWidgetItem(new_acc.account_name)
-        name_item.setData(Qt.UserRole, new_acc.account_id)
-        self.account_table.setItem(row, 1, name_item)
-
-        # 登录按钮
-        login_btn = QPushButton("登录")
-        login_btn.setProperty("account_id", new_acc.account_id)
-        login_btn.setProperty("account_name", new_acc.account_name)
-        login_btn.setProperty("platform", new_acc.platform)
-        login_btn.setProperty("profile_dir", new_acc.profile_dir)
-        login_btn.clicked.connect(self.on_login_btn_clicked)
-        self.account_table.setCellWidget(row, 2, login_btn)
-
-        # 添加到任务配置表
-        task_row = self.task_table.rowCount()
-        self.task_table.insertRow(task_row)
-
-        task_name_item = QTableWidgetItem(new_acc.account_name)
-        task_name_item.setData(Qt.UserRole, new_acc.account_id)
-        self.task_table.setItem(task_row, 0, task_name_item)
-
-        spin = QSpinBox()
-        spin.setRange(0, 100)
-        spin.setValue(0)
-        spin.setProperty("account_id", new_acc.account_id)
-        spin.valueChanged.connect(self.on_count_changed)
-        self.task_table.setCellWidget(task_row, 1, spin)
-
-        self.task_table.setItem(task_row, 2, QTableWidgetItem("待配置"))
+        # 使用统一的方法添加行
+        self._add_account_row(row, new_acc)
 
         self.log(f"✅ 已添加新账号: {new_acc.account_name}")
 
@@ -663,3 +686,187 @@ class MainWindow(QMainWindow):
         self.log_text.verticalScrollBar().setValue(
             self.log_text.verticalScrollBar().maximum()
         )
+
+    def on_delete_account_clicked(self):
+        """点击删除账号按钮"""
+        btn = self.sender()
+        account_id = btn.property("account_id")
+        account_name = btn.property("account_name")
+
+        # 检查是否正在运行任务
+        if scheduler.is_running:
+            QMessageBox.warning(self, "警告", "发布任务进行中，无法删除账号！")
+            return
+
+        # 确认删除
+        reply = QMessageBox.question(
+            self,
+            "确认删除",
+            f"确定要删除账号「{account_name}」吗？\n\n此操作将同时删除该账号的登录信息，不可恢复！",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+
+        if reply != QMessageBox.Yes:
+            return
+
+        # 执行删除
+        success = scheduler.remove_account(account_id)
+
+        if success:
+            # 从表格中移除对应行
+            for row in range(self.account_table.rowCount()):
+                name_item = self.account_table.item(row, 1)
+                if name_item and name_item.data(Qt.UserRole) == account_id:
+                    self.account_table.removeRow(row)
+                    break
+
+            # 从任务配置表中移除
+            for row in range(self.task_table.rowCount()):
+                task_item = self.task_table.item(row, 0)
+                if task_item and task_item.data(Qt.UserRole) == account_id:
+                    self.task_table.removeRow(row)
+                    break
+
+            self.log(f"🗑️ 已删除账号: {account_name}")
+        else:
+            QMessageBox.warning(self, "错误", f"删除账号失败！")
+
+    def on_open_browser_clicked(self):
+        """点击打开浏览器按钮"""
+        btn = self.sender()
+        account_id = btn.property("account_id")
+        platform = btn.property("platform")
+        profile_dir = btn.property("profile_dir")
+
+        # 确定启动URL
+        if platform == "toutiao":
+            start_url = "https://mp.toutiao.com/profile_v4/index"
+        elif platform == "baijiahao":
+            start_url = "https://baijiahao.baidu.com/builder/rc/noticemessage/notice_system"
+        else:
+            start_url = "https://mp.sohu.com/mpfe/v4/contentManagement/first/page"
+
+        self.log(f"🌐 正在打开浏览器: {account_id}")
+
+        # 使用工作线程打开浏览器
+        self._open_browser_worker = AsyncWorker(
+            task_type="open_browser",
+            account_id=account_id,
+            platform=platform,
+            profile_dir=profile_dir,
+            start_url=start_url
+        )
+        self._open_browser_worker.finished.connect(
+            lambda: self.log(f"✅ 浏览器已打开: {account_id}")
+        )
+        self._open_browser_worker.error.connect(
+            lambda e: self.log(f"❌ 打开浏览器失败: {e}")
+        )
+        self._open_browser_worker.start()
+
+    def on_account_cell_double_clicked(self, row: int, column: int):
+        """双击账号单元格 - 只有账号名称列可编辑"""
+        if column == 1:  # 账号名称列
+            item = self.account_table.item(row, column)
+            if item:
+                item.setFlags(item.flags() | Qt.ItemIsEditable)
+                self.account_table.editItem(item)
+
+    def on_account_cell_changed(self, row: int, column: int):
+        """账号单元格内容变化 - 保存修改的昵称"""
+        if column != 1:  # 只处理账号名称列
+            return
+
+        item = self.account_table.item(row, column)
+        if not item:
+            return
+
+        account_id = item.data(Qt.UserRole)
+        new_name = item.text().strip()
+
+        if not account_id or not new_name:
+            return
+
+        # 更新scheduler中的账号名称
+        for acc in scheduler.account_tasks:
+            if acc.account_id == account_id:
+                acc.account_name = new_name
+                break
+
+        # 更新任务配置表中的显示
+        for task_row in range(self.task_table.rowCount()):
+            task_item = self.task_table.item(task_row, 0)
+            if task_item and task_item.data(Qt.UserRole) == account_id:
+                task_item.setText(new_name)
+                break
+
+        # 保存到配置文件
+        from src.utils.config import config
+        config.update_account_name(account_id, new_name)
+
+        self.log(f"✏️ 账号昵称已修改: {new_name}")
+
+    def on_account_row_moved(self, logical_index: int, old_visual_index: int, new_visual_index: int):
+        """账号行拖拽移动后 - 保存新顺序"""
+        # 获取当前视觉顺序对应的账号ID列表
+        new_order = []
+        for visual_row in range(self.account_table.rowCount()):
+            logical_row = self.account_table.verticalHeader().logicalIndex(visual_row)
+            name_item = self.account_table.item(logical_row, 1)
+            if name_item:
+                account_id = name_item.data(Qt.UserRole)
+                if account_id:
+                    new_order.append(account_id)
+
+        # 重新排序scheduler中的账号任务
+        scheduler.reorder_accounts(new_order)
+
+        # 同步更新任务配置表的顺序
+        self._sync_task_table_order(new_order)
+
+        # 保存到配置文件
+        from src.utils.config import config
+        config.reorder_accounts(new_order)
+
+        self.log(f"📋 账号顺序已更新")
+
+    def _sync_task_table_order(self, new_order: list):
+        """同步任务配置表的顺序"""
+        # 保存当前任务表的数据
+        task_data = {}
+        for row in range(self.task_table.rowCount()):
+            task_item = self.task_table.item(row, 0)
+            if task_item:
+                account_id = task_item.data(Qt.UserRole)
+                spin_widget = self.task_table.cellWidget(row, 1)
+                count = spin_widget.value() if spin_widget else 0
+                status_item = self.task_table.item(row, 2)
+                status = status_item.text() if status_item else "待配置"
+                task_data[account_id] = {
+                    'name': task_item.text(),
+                    'count': count,
+                    'status': status
+                }
+
+        # 按新顺序重建任务表
+        self.task_table.setRowCount(len(new_order))
+        for row, account_id in enumerate(new_order):
+            if account_id in task_data:
+                data = task_data[account_id]
+
+                # 账号名称
+                task_name_item = QTableWidgetItem(data['name'])
+                task_name_item.setData(Qt.UserRole, account_id)
+                self.task_table.setItem(row, 0, task_name_item)
+
+                # 发布数量
+                spin = QSpinBox()
+                spin.setRange(0, 100)
+                spin.setValue(data['count'])
+                spin.setProperty("account_id", account_id)
+                spin.valueChanged.connect(self.on_count_changed)
+                self.task_table.setCellWidget(row, 1, spin)
+
+                # 状态
+                self.task_table.setItem(row, 2, QTableWidgetItem(data['status']))

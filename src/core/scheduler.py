@@ -12,6 +12,7 @@ from src.core.logger import get_logger
 from src.adapters.base_adapter import BaseAdapter
 from src.adapters.toutiao_adapter import ToutiaoAdapter
 from src.adapters.sohu_adapter import SohuAdapter
+from src.adapters.baijiahao_adapter import BaijiahaoAdapter
 from src.utils.excel_reader import Article, ExcelReader
 from src.utils.config import config
 
@@ -95,7 +96,7 @@ class Scheduler:
         """添加新账号
 
         Args:
-            platform: 平台名称 ('toutiao' 或 'sohu')
+            platform: 平台名称 ('toutiao', 'sohu' 或 'baijiahao')
 
         Returns:
             新创建的AccountTask对象
@@ -115,6 +116,48 @@ class Scheduler:
 
         logger.info(f"已添加新账号: {account_task.account_name}")
         return account_task
+
+    def remove_account(self, account_id: str) -> bool:
+        """删除账号
+
+        Args:
+            account_id: 账号ID
+
+        Returns:
+            是否删除成功
+        """
+        # 调用config删除账号（会同时删除浏览器配置目录）
+        success = config.delete_account(account_id)
+
+        if success:
+            # 从内存中的账号任务列表移除
+            self.account_tasks = [acc for acc in self.account_tasks if acc.account_id != account_id]
+            logger.info(f"已删除账号: {account_id}")
+
+        return success
+
+    def reorder_accounts(self, new_order: list):
+        """重新排序账号任务列表
+
+        Args:
+            new_order: 账号ID的新顺序列表
+        """
+        # 创建ID到AccountTask的映射
+        account_map = {acc.account_id: acc for acc in self.account_tasks}
+
+        # 按新顺序重建列表
+        reordered = []
+        for account_id in new_order:
+            if account_id in account_map:
+                reordered.append(account_map[account_id])
+
+        # 添加不在新顺序中的账号（防止丢失）
+        for acc in self.account_tasks:
+            if acc.account_id not in new_order:
+                reordered.append(acc)
+
+        self.account_tasks = reordered
+        logger.info(f"账号顺序已更新: {[acc.account_name for acc in self.account_tasks]}")
 
     def load_articles(self, file_path: str) -> bool:
         """加载文章"""
@@ -173,6 +216,8 @@ class Scheduler:
             adapter = ToutiaoAdapter(task.account_id, profile_dir, task.account_name)
         elif task.platform == 'sohu':
             adapter = SohuAdapter(task.account_id, profile_dir, task.account_name)
+        elif task.platform == 'baijiahao':
+            adapter = BaijiahaoAdapter(task.account_id, profile_dir, task.account_name)
         else:
             raise ValueError(f"不支持的平台: {task.platform}")
         
@@ -191,7 +236,7 @@ class Scheduler:
         self._log(f"设置并发数: {self.max_concurrent}")
 
     async def run(self):
-        """运行所有任务（并行模式）"""
+        """运行所有任务（串行模式）"""
         if self._running:
             logger.warning("调度器已在运行中")
             return
@@ -201,7 +246,7 @@ class Scheduler:
         self._completed_count = 0
         self._total_count = len(self.tasks)
 
-        self._log(f"开始执行 {self._total_count} 个发布任务（并发数: {self.max_concurrent}）...")
+        self._log(f"开始执行 {self._total_count} 个发布任务（串行模式）...")
 
         # 按账号分组任务
         account_task_groups: Dict[str, List[PublishTask]] = {}
@@ -212,17 +257,11 @@ class Scheduler:
 
         self._log(f"共 {len(account_task_groups)} 个账号参与发布")
 
-        # 创建信号量控制并发数
-        semaphore = asyncio.Semaphore(self.max_concurrent)
-
-        # 为每个账号创建并行任务
-        account_coroutines = []
+        # 串行执行每个账号的任务
         for account_id, tasks in account_task_groups.items():
-            coro = self._run_account_tasks(account_id, tasks, semaphore)
-            account_coroutines.append(coro)
-
-        # 并行执行所有账号的任务
-        await asyncio.gather(*account_coroutines, return_exceptions=True)
+            if self._cancelled:
+                break
+            await self._run_account_tasks_serial(account_id, tasks)
 
         self._running = False
 
@@ -233,54 +272,53 @@ class Scheduler:
         self._log("所有任务已完成!")
         self._adapters.clear()
 
-    async def _run_account_tasks(self, account_id: str, tasks: List[PublishTask], semaphore: asyncio.Semaphore):
-        """运行单个账号的所有任务"""
-        async with semaphore:
+    async def _run_account_tasks_serial(self, account_id: str, tasks: List[PublishTask]):
+        """串行运行单个账号的所有任务"""
+        if self._cancelled:
+            return
+
+        account_name = tasks[0].account_name if tasks else account_id
+        self._log(f"🚀 [{account_name}] 开始发布 {len(tasks)} 篇文章...")
+
+        try:
+            # 获取适配器
+            adapter = self._get_adapter(tasks[0])
+
+            # 检查登录状态
             if self._cancelled:
                 return
 
-            account_name = tasks[0].account_name if tasks else account_id
-            self._log(f"🚀 [{account_name}] 开始发布 {len(tasks)} 篇文章...")
+            is_logged_in = await adapter.check_login_status()
 
-            try:
-                # 获取适配器
-                adapter = self._get_adapter(tasks[0])
-
-                # 检查登录状态
+            if not is_logged_in:
+                self._log(f"[{account_name}] 需要登录，请在浏览器中手动登录...")
+                login_success = await adapter.wait_for_login()
                 if self._cancelled:
                     return
-
-                is_logged_in = await adapter.check_login_status()
-
-                if not is_logged_in:
-                    self._log(f"[{account_name}] 需要登录，请在浏览器中手动登录...")
-                    login_success = await adapter.wait_for_login()
-                    if self._cancelled:
-                        return
-                    if not login_success:
-                        for task in tasks:
-                            task.status = TaskStatus.FAILED
-                            task.result = {'success': False, 'message': '登录超时'}
-                            await self._update_progress(task)
-                        self._log(f"❌ [{account_name}] 登录失败，跳过该账号所有任务")
-                        return
-
-                # 依次发布该账号的文章
-                for task in tasks:
-                    if self._cancelled:
-                        break
-
-                    await self._execute_single_task(task, adapter)
-
-            except Exception as e:
-                self._log(f"❌ [{account_name}] 账号执行异常: {e}")
-                for task in tasks:
-                    if task.status == TaskStatus.PENDING:
+                if not login_success:
+                    for task in tasks:
                         task.status = TaskStatus.FAILED
-                        task.result = {'success': False, 'message': str(e)}
+                        task.result = {'success': False, 'message': '登录超时'}
                         await self._update_progress(task)
+                    self._log(f"❌ [{account_name}] 登录失败，跳过该账号所有任务")
+                    return
 
-            self._log(f"✅ [{account_name}] 该账号任务完成")
+            # 依次发布该账号的文章
+            for task in tasks:
+                if self._cancelled:
+                    break
+
+                await self._execute_single_task(task, adapter)
+
+        except Exception as e:
+            self._log(f"❌ [{account_name}] 账号执行异常: {e}")
+            for task in tasks:
+                if task.status == TaskStatus.PENDING:
+                    task.status = TaskStatus.FAILED
+                    task.result = {'success': False, 'message': str(e)}
+                    await self._update_progress(task)
+
+        self._log(f"✅ [{account_name}] 该账号任务完成")
 
     async def _execute_single_task(self, task: PublishTask, adapter: BaseAdapter):
         """执行单个发布任务"""

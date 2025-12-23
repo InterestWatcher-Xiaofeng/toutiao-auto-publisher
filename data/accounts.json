@@ -1,6 +1,53 @@
 {
     "accounts": [
         {
+            "id": "baijiahao_1",
+            "platform": "baijiahao",
+            "name": "百家号-流量情报局",
+            "profile_dir": "baijiahao_account1",
+            "enabled": true
+        },
+        {
+            "id": "sohu_1",
+            "platform": "sohu",
+            "name": "搜狐-流量情报局",
+            "profile_dir": "sohu_account1",
+            "enabled": true,
+            "nickname": "流量情报局"
+        },
+        {
+            "id": "sohu_2",
+            "platform": "sohu",
+            "name": "搜狐-susu说流量",
+            "profile_dir": "sohu_account2",
+            "enabled": true,
+            "nickname": "susu说流量"
+        },
+        {
+            "id": "toutiao_4",
+            "platform": "toutiao",
+            "name": "今日头条-月月说流量",
+            "profile_dir": "toutiao_account4",
+            "enabled": true,
+            "nickname": "月月说流量"
+        },
+        {
+            "id": "toutiao_6",
+            "platform": "toutiao",
+            "name": "今日头条-susu说运营",
+            "profile_dir": "toutiao_account6",
+            "enabled": true,
+            "nickname": "susu说运营"
+        },
+        {
+            "id": "toutiao_3",
+            "platform": "toutiao",
+            "name": "今日头条-流量大师兄",
+            "profile_dir": "toutiao_account3",
+            "enabled": true,
+            "nickname": "流量大师兄"
+        },
+        {
             "id": "toutiao_1",
             "platform": "toutiao",
             "name": "今日头条-流量情报局",
@@ -15,37 +62,6 @@
             "profile_dir": "toutiao_account2",
             "enabled": true,
             "nickname": "二哥流量全知道"
-        },
-        {
-            "id": "toutiao_3",
-            "platform": "toutiao",
-            "name": "今日头条-流量大师兄",
-            "profile_dir": "toutiao_account3",
-            "enabled": true,
-            "nickname": "流量大师兄"
-        },
-        {
-            "id": "sohu_1",
-            "platform": "sohu",
-            "name": "搜狐-流量情报局",
-            "profile_dir": "sohu_account1",
-            "enabled": true,
-            "nickname": "流量情报局"
-        },
-        {
-            "id": "sohu_2",
-            "platform": "sohu",
-            "name": "搜狐-账号2",
-            "profile_dir": "sohu_account2",
-            "enabled": true
-        },
-        {
-            "id": "toutiao_4",
-            "platform": "toutiao",
-            "name": "今日头条-月月说流量",
-            "profile_dir": "toutiao_account4",
-            "enabled": true,
-            "nickname": "月月说流量"
         },
         {
             "id": "toutiao_5",
