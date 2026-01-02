@@ -265,210 +265,127 @@ async def publish_single_article(adapter, page, article, article_index, total_ar
 
     await asyncio.sleep(3)  # 步骤间隔
 
-    # 步骤5: 测试封面选项
+    # 步骤5: 测试封面选项 - 使用多选择器策略
     print("\n[步骤5] 测试封面选项（单图）...")
     try:
         # 滚动到封面区域
         await page.evaluate("window.scrollBy(0, 500)")
         await asyncio.sleep(1)
 
-        await page.click(BaijiahaoSelectors.SINGLE_IMAGE_RADIO)
-        print("✅ 点击单图选项成功")
+        # 多选择器策略
+        single_image_clicked = False
+        for selector in BaijiahaoSelectors.SINGLE_IMAGE_SELECTORS:
+            try:
+                element = await page.wait_for_selector(selector, timeout=2000)
+                if element:
+                    await element.click()
+                    print(f"✅ 点击单图选项成功: {selector[:50]}")
+                    single_image_clicked = True
+                    break
+            except Exception:
+                print(f"  ⚠️ 选择器失败: {selector[:50]}")
+                continue
+
+        if not single_image_clicked:
+            # 最后尝试使用主选择器强制点击
+            await page.click(BaijiahaoSelectors.SINGLE_IMAGE_RADIO, force=True)
+            print("✅ 点击单图选项成功（强制点击）")
+
         await asyncio.sleep(2)
     except Exception as e:
         print(f"⚠️ 封面选项测试失败: {e}")
 
-    # 步骤6: 点击图片选择框
-    print("\n[步骤6] 点击图片选择框...")
+    # 步骤6: 点击"免费正版图库"标签（跳过图片选择框）
+    print("\n[步骤6] 点击免费正版图库标签...")
     await asyncio.sleep(2)
-    try:
-        image_box_selectors = [
-            BaijiahaoSelectors.IMAGE_SELECT_BOX,
-            ".cover-list .DraggableTags-tag-drag",
-            ".cover-list-one .wrap-scale-DraggableTags",
-            ".cover-upload-btn",
-            "[class*='cover'] [class*='upload']",
-            ".add-cover-btn",
-        ]
+    clicked = False
+    for selector in BaijiahaoSelectors.AUTH_LIB_TAB_SELECTORS:
+        try:
+            element = await page.wait_for_selector(selector, timeout=2000)
+            if element:
+                await element.click()
+                print(f"✅ 点击免费正版图库标签成功: {selector[:50]}")
+                clicked = True
+                break
+        except Exception:
+            print(f"  ⚠️ 选择器失败: {selector[:50]}")
+    if not clicked:
+        print("❌ 所有免费正版图库标签选择器都失败")
+    await asyncio.sleep(2)
 
-        clicked = False
-        for selector in image_box_selectors:
-            try:
-                element = await page.wait_for_selector(selector, timeout=3000)
-                if element:
-                    await element.click()
-                    print(f"✅ 点击图片选择框成功: {selector[:50]}")
-                    clicked = True
-                    break
-            except Exception:
-                print(f"  ⚠️ 选择器失败: {selector[:50]}")
-                continue
-
-        if not clicked:
-            print("❌ 所有图片选择框选择器都失败")
-    except Exception as e:
-        print(f"⚠️ 图片选择框测试失败: {e}")
-
+    # 步骤7: 搜索"渡鸦"
+    print("\n[步骤7] 搜索渡鸦...")
+    searched = False
+    for selector in BaijiahaoSelectors.AUTH_LIB_SEARCH_SELECTORS:
+        try:
+            element = await page.wait_for_selector(selector, timeout=2000)
+            if element:
+                await element.click()
+                await asyncio.sleep(0.5)
+                await page.fill(selector, "渡鸦")
+                print(f"✅ 输入搜索词成功: {selector[:50]}")
+                searched = True
+                break
+        except Exception:
+            print(f"  ⚠️ 选择器失败: {selector[:50]}")
+    if searched:
+        await asyncio.sleep(0.5)
+        await page.keyboard.press("Enter")
+        print("✅ 按回车搜索")
+    else:
+        print("❌ 搜索输入失败")
     await asyncio.sleep(3)
 
-    # 步骤7: 点击"免费正版图库"标签
-    print("\n[步骤7] 点击免费正版图库标签...")
-    try:
-        rights_tab_selectors = [
-            "#rc-tabs-0-tab-rights",
-            "#rc-tabs-1-tab-rights",
-            "[role='tab']:has-text('免费正版')",
-            ".cheetah-tabs-tab:has-text('免费正版')",
-            "text=免费正版图库",
-        ]
-
-        clicked = False
-        for selector in rights_tab_selectors:
-            try:
-                element = await page.wait_for_selector(selector, timeout=3000)
-                if element:
-                    await element.click()
-                    print(f"✅ 点击免费正版图库标签成功: {selector[:50]}")
-                    clicked = True
-                    break
-            except Exception:
-                print(f"  ⚠️ 选择器失败: {selector[:50]}")
-                continue
-
-        if not clicked:
-            print("❌ 所有免费正版图库标签选择器都失败")
-    except Exception as e:
-        print(f"⚠️ 免费正版图库标签测试失败: {e}")
-
+    # 步骤8: 选择图片（点击图片本身，模拟真人）
+    print("\n[步骤8] 选择图片（点击图片）...")
+    clicked = False
+    for selector in BaijiahaoSelectors.AUTH_LIB_IMAGE_SELECTORS:
+        try:
+            element = await page.wait_for_selector(selector, timeout=2000)
+            if element:
+                # 使用 force=True 确保点击成功
+                await element.click(force=True)
+                print(f"✅ 选择图片成功: {selector[:50]}")
+                clicked = True
+                break
+        except Exception:
+            print(f"  ⚠️ 选择器失败: {selector[:50]}")
+    if not clicked:
+        print("❌ 所有图片选择器都失败")
     await asyncio.sleep(2)
 
-    # 步骤8: 搜索"渡鸦"
-    print("\n[步骤8] 搜索渡鸦...")
-    try:
-        search_input_selectors = [
-            "#rc-tabs-0-panel-rights > div > span > input",
-            "#rc-tabs-1-panel-rights > div > span > input",
-            "[placeholder*='搜索']",
-            "input[type='text']",
-        ]
+    # 步骤9: 点击确认按钮
+    print("\n[步骤9] 点击确认按钮...")
+    clicked = False
+    for selector in BaijiahaoSelectors.CONFIRM_BTN_SELECTORS:
+        try:
+            element = await page.wait_for_selector(selector, timeout=3000)
+            if element:
+                await element.click()
+                print(f"✅ 点击确认按钮成功")
+                clicked = True
+                break
+        except Exception:
+            print(f"  ⚠️ 选择器失败: {selector[:50]}")
+    if not clicked:
+        print("❌ 所有确认按钮选择器都失败")
+    await asyncio.sleep(10)
 
-        searched = False
-        for selector in search_input_selectors:
-            try:
-                element = await page.wait_for_selector(selector, timeout=3000)
-                if element:
-                    await element.click()
-                    await asyncio.sleep(0.5)
-                    await page.fill(selector, "渡鸦")
-                    print(f"✅ 输入搜索词成功: {selector[:50]}")
-                    searched = True
-                    break
-            except Exception:
-                print(f"  ⚠️ 选择器失败: {selector[:50]}")
-                continue
-
-        if searched:
-            # 按回车搜索
-            await asyncio.sleep(0.5)
-            await page.keyboard.press("Enter")
-            print("✅ 按回车搜索")
-        else:
-            print("❌ 搜索输入失败")
-    except Exception as e:
-        print(f"⚠️ 搜索测试失败: {e}")
-
-    await asyncio.sleep(3)
-
-    # 步骤9: 选择图片
-    print("\n[步骤9] 选择图片...")
-    try:
-        image_selectors = [
-            "#rc-tabs-1-panel-rights > div > div > div > div > div.pubu-content > div:nth-child(4) > div",
-            "#rc-tabs-0-panel-rights > div > div > div > div > div.pubu-content > div:nth-child(4) > div",
-            ".pubu-content > div:nth-child(1) > div",
-            ".pubu-content > div:nth-child(2) > div",
-            ".pubu-content > div:nth-child(3) > div",
-            ".pubu-content > div:nth-child(4) > div",
-        ]
-
-        clicked = False
-        for selector in image_selectors:
-            try:
-                element = await page.wait_for_selector(selector, timeout=3000)
-                if element:
-                    await element.click()
-                    print(f"✅ 选择图片成功: {selector[:50]}")
-                    clicked = True
-                    break
-            except Exception:
-                print(f"  ⚠️ 选择器失败: {selector[:50]}")
-                continue
-
-        if not clicked:
-            print("❌ 所有图片选择器都失败")
-    except Exception as e:
-        print(f"⚠️ 选择图片测试失败: {e}")
-
-    await asyncio.sleep(2)
-
-    # 步骤10: 点击确认按钮
-    print("\n[步骤10] 点击确认按钮...")
-    try:
-        confirm_selectors = [
-            "body > div:nth-child(25) > div > div.cheetah-modal-wrap.cheetah-modal-centered > div > div:nth-child(1) > div > div.cheetah-modal-footer > button.cheetah-btn.css-1ho6t72.cheetah-btn-primary.cheetah-btn-solid.cheetah-public.acss-qlkyg1.acss-1kjo6pu.acss-1tjgk22.acss-yhl6pe.acss-uv0qn4.acss-58e25w.acss-1grxnxm.acss-1izrri0.cheetah-btn-L.cheetah-btn-text-primary > span",
-            BaijiahaoSelectors.CONFIRM_BTN,
-            ".cheetah-modal-footer .cheetah-btn-primary",
-            "button:has-text('确定')",
-            "button:has-text('确认')",
-        ]
-
-        clicked = False
-        for selector in confirm_selectors:
-            try:
-                element = await page.wait_for_selector(selector, timeout=3000)
-                if element:
-                    await element.click()
-                    print(f"✅ 点击确认按钮成功")
-                    clicked = True
-                    break
-            except Exception:
-                print(f"  ⚠️ 选择器失败: {selector[:50]}")
-                continue
-
-        if not clicked:
-            print("❌ 所有确认按钮选择器都失败")
-    except Exception as e:
-        print(f"⚠️ 确认按钮测试失败: {e}")
-
-    await asyncio.sleep(10)  # 等待10秒，确保页面加载完成
-
-    # 步骤11: 点击发布按钮
-    print("\n[步骤11] 点击发布按钮（等待10秒后）...")
-    try:
-        publish_selectors = [
-            "#root > div > div.mp-container.mp-container-edit.mp-container-edit-news > div > div.scale-box > div > div > div._7d68672f1508bf4e-operatorWrapper > div > span > span.op-list-right > div:nth-child(4) > button > span",
-            BaijiahaoSelectors.PUBLISH_BTN,
-            "button:has-text('发布')",
-            ".op-list-right button:has-text('发布')",
-        ]
-
-        clicked = False
-        for selector in publish_selectors:
-            try:
-                element = await page.wait_for_selector(selector, timeout=3000)
-                if element:
-                    await element.click()
-                    print(f"✅ 点击发布按钮成功")
-                    clicked = True
-                    break
-            except Exception:
-                print(f"  ⚠️ 选择器失败: {selector[:50]}")
-                continue
-
-        if not clicked:
-            print("❌ 所有发布按钮选择器都失败")
-    except Exception as e:
-        print(f"⚠️ 发布按钮测试失败: {e}")
+    # 步骤10: 点击发布按钮
+    print("\n[步骤10] 点击发布按钮（等待10秒后）...")
+    clicked = False
+    for selector in BaijiahaoSelectors.PUBLISH_BTN_SELECTORS:
+        try:
+            element = await page.wait_for_selector(selector, timeout=3000)
+            if element:
+                await element.click()
+                print(f"✅ 点击发布按钮成功")
+                clicked = True
+                break
+        except Exception:
+            print(f"  ⚠️ 选择器失败: {selector[:50]}")
+    if not clicked:
+        print("❌ 所有发布按钮选择器都失败")
 
     await asyncio.sleep(5)
     print(f"\n✅ 第 {article_index + 1}/{total_articles} 篇文章发布完成!")
@@ -480,11 +397,11 @@ async def test_publish():
     print("百家号发布流程 - 发布所有文章")
     print("=" * 50)
 
-    # 读取Excel文件
-    excel_path = r"C:\Users\Yu feng\Desktop\测试.xlsx"
+    # 读取CSV文件
+    csv_path = r"C:\Users\Yu feng\Desktop\流水线\文章_拆分结果.csv"
     reader = ExcelReader()
-    if not reader.load(excel_path):
-        print(f"❌ 无法加载Excel文件: {excel_path}")
+    if not reader.load(csv_path):
+        print(f"❌ 无法加载CSV文件: {csv_path}")
         return
 
     print(f"✅ 加载了 {len(reader.articles)} 篇文章")

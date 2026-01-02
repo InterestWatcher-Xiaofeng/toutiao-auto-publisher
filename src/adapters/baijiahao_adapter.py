@@ -31,23 +31,75 @@ class BaijiahaoSelectors:
     # 正文编辑器
     CONTENT_EDITOR = "body"
     
-    # 单图选项框
-    SINGLE_IMAGE_RADIO = "#bjhNewsCover > div > div > div.cheetah-col.cheetah-form-item-control.cheetah-col-xs-24.cheetah-col-sm-20.css-1o1cgpv > div > div > div > div.cheetah-radio-group.cheetah-radio-group-outline.cheetah-radio-group-middle.cheetah-public.cover-radio-group.css-8lrrwo > label:nth-child(2) > span.cheetah-radio.ant-wave-target > input"
-    
-    # 图片选择框
+    # 单图选项框 (2025-12-23更新)
+    SINGLE_IMAGE_RADIO = "#bjhNewsCover > div > div > div.cheetah-col.cheetah-form-item-control.cheetah-col-xs-24.cheetah-col-sm-20.css-1o1cgpv > div > div > div[class*='list'] > div > div > div > div > div"
+    SINGLE_IMAGE_SELECTORS = [
+        "#bjhNewsCover > div > div > div.cheetah-col.cheetah-form-item-control.cheetah-col-xs-24.cheetah-col-sm-20.css-1o1cgpv > div > div > div[class*='list'] > div > div > div > div > div",
+        "label:has-text('单图')",
+        "span:has-text('单图')",
+        "#bjhNewsCover .cover-radio-group label:nth-child(2)",
+    ]
+
+    # 图片选择框（点击后打开图片选择弹窗）
     IMAGE_SELECT_BOX = "#bjhNewsCover > div > div.cheetah-row.cheetah-form-item-row.css-1o1cgpv > div.cheetah-col.cheetah-form-item-control.cheetah-col-xs-24.cheetah-col-sm-20.css-1o1cgpv > div.cheetah-form-item-control-input > div > div > div.cover-list.cover-list-one > div > div.wrap-scale-DraggableTags > div > div > div.DraggableTags-tag-drag > div > div"
-    
-    # 本地图片标签
-    LOCAL_IMAGE_TAB = "#rc-tabs-4-tab-choose-remote"
-    
-    # 图片上传按钮
-    IMAGE_UPLOAD_BTN = "#rc-tabs-4-panel-choose-remote > div > div > div > div > span > div > span > div > div"
-    
-    # 确认按钮
-    CONFIRM_BTN = "body > div:nth-child(25) > div > div.cheetah-modal-wrap.cheetah-modal-centered > div > div:nth-child(1) > div > div.cheetah-modal-footer > button.cheetah-btn.css-1ho6t72.cheetah-btn-primary.cheetah-btn-solid.cheetah-public.acss-qlkyg1.acss-1kjo6pu.acss-1tjgk22.acss-yhl6pe.acss-uv0qn4.acss-58e25w.acss-1grxnxm.acss-1izrri0.cheetah-btn-L.cheetah-btn-text-primary > span"
-    
-    # 发布按钮
-    PUBLISH_BTN = "#root > div > div.mp-container.mp-container-edit.mp-container-edit-news > div > div.scale-box > div > div > div._7d68672f1508bf4e-operatorWrapper > div > span > span.op-list-right > div:nth-child(4) > button > span"
+    IMAGE_SELECT_BOX_SELECTORS = [
+        "#bjhNewsCover .cover-list-one .DraggableTags-tag-drag",
+        "#bjhNewsCover .cover-list .wrap-scale-DraggableTags",
+        ".cover-list-one div[class*='upload']",
+        "#bjhNewsCover [class*='add']",
+    ]
+
+    # 免费正版图库标签 (2025-12-23更新)
+    AUTH_LIB_TAB = "#rc-tabs-1-tab-authLib"
+    AUTH_LIB_TAB_SELECTORS = [
+        "#rc-tabs-1-tab-authLib",
+        "#rc-tabs-2-tab-authLib",
+        "#rc-tabs-0-tab-authLib",
+        "[role='tab']:has-text('免费正版')",
+    ]
+
+    # 免费正版图库搜索框 (2025-12-23更新)
+    AUTH_LIB_SEARCH = "#rc-tabs-1-panel-authLib input"
+    AUTH_LIB_SEARCH_SELECTORS = [
+        "#rc-tabs-1-panel-authLib input",
+        "#rc-tabs-2-panel-authLib input",
+        "#rc-tabs-0-panel-authLib input",
+        "[class*='authLib'] input",
+    ]
+
+    # 免费正版图库图片选择 - 点击图片本身（img），模拟真人点击
+    AUTH_LIB_IMAGE = "#rc-tabs-1-panel-authLib .pubu-content > div:nth-child(5) > img"
+    AUTH_LIB_IMAGE_SELECTORS = [
+        "#rc-tabs-1-panel-authLib .pubu-content > div:nth-child(5) > img",
+        "#rc-tabs-1-panel-authLib .pubu-content > div:nth-child(4) > img",
+        "#rc-tabs-1-panel-authLib .pubu-content > div:nth-child(3) > img",
+        "#rc-tabs-2-panel-authLib .pubu-content > div:nth-child(5) > img",
+        "#rc-tabs-2-panel-authLib .pubu-content > div:nth-child(4) > img",
+        "[class*='authLib'] .pubu-content > div > img",
+        ".pubu-content > div:nth-child(5) > img",
+    ]
+
+    # 确认按钮 (2025-01-01更新)
+    CONFIRM_BTN = "[class*='bottom'] button.cheetah-btn-primary"
+    CONFIRM_BTN_SELECTORS = [
+        # 新版选择器
+        "#rc-tabs-1-panel-authLib [class*='bottom'] button.cheetah-btn-primary",
+        "#rc-tabs-2-panel-authLib [class*='bottom'] button.cheetah-btn-primary",
+        "[class*='authLib'] [class*='bottom'] button.cheetah-btn-primary",
+        "[class*='bottom'] button.cheetah-btn-primary span",
+        # 备用
+        ".cheetah-btn-primary:has-text('确定')",
+        "button:has-text('确定')",
+    ]
+
+    # 发布按钮 (2025-01-01更新)
+    PUBLISH_BTN = "#root .op-list-right > div:nth-child(4) > button > span"
+    PUBLISH_BTN_SELECTORS = [
+        "#root .op-list-right > div:nth-child(4) > button > span",
+        "#root .op-list-right > div:nth-child(4) > button",
+        ".op-list-right button:has-text('发布')",
+        "button:has-text('发布')",
+    ]
 
 
 class BaijiahaoAdapter(BaseAdapter):
@@ -284,56 +336,58 @@ class BaijiahaoAdapter(BaseAdapter):
                 logger.warning(f"[{self.account_name}] 正文填写失败: {e}")
             await self.random_delay(2, 3)
 
-            # 步骤5: 点击"单图"选项框
+            # 步骤5: 点击"单图"选项框 - 使用多选择器策略
             logger.info(f"[{self.account_name}] 步骤5: 点击单图选项")
             try:
                 await page.evaluate("window.scrollBy(0, 500)")
                 await asyncio.sleep(1)
-                await page.click(BaijiahaoSelectors.SINGLE_IMAGE_RADIO)
-                logger.info(f"[{self.account_name}] ✓ 单图选项已选择")
+
+                # 多选择器策略
+                single_image_clicked = False
+                for selector in BaijiahaoSelectors.SINGLE_IMAGE_SELECTORS:
+                    try:
+                        element = await page.wait_for_selector(selector, timeout=2000)
+                        if element:
+                            await element.click()
+                            logger.info(f"[{self.account_name}] ✓ 单图选项已选择 (选择器: {selector[:50]}...)")
+                            single_image_clicked = True
+                            break
+                    except Exception:
+                        continue
+
+                if not single_image_clicked:
+                    # 最后尝试使用主选择器强制点击
+                    await page.click(BaijiahaoSelectors.SINGLE_IMAGE_RADIO, force=True)
+                    logger.info(f"[{self.account_name}] ✓ 单图选项已选择 (强制点击)")
+
                 await self.random_delay(1, 2)
             except Exception as e:
                 logger.warning(f"[{self.account_name}] 点击单图选项失败: {e}")
 
-            # 步骤6: 点击图片选择框
-            logger.info(f"[{self.account_name}] 步骤6: 点击图片选择框")
+            # 步骤6: 点击"免费正版图库"标签（跳过图片选择框步骤）
+            logger.info(f"[{self.account_name}] 步骤6: 点击免费正版图库标签")
             await asyncio.sleep(2)
-            try:
-                await page.click(BaijiahaoSelectors.IMAGE_SELECT_BOX)
-                logger.info(f"[{self.account_name}] ✓ 图片选择框已打开")
-                await self.random_delay(2, 3)
-            except Exception as e:
-                logger.warning(f"[{self.account_name}] 点击图片选择框失败: {e}")
-
-            # 步骤7: 点击"免费正版图库"标签
-            logger.info(f"[{self.account_name}] 步骤7: 点击免费正版图库标签")
-            rights_tab_selectors = [
-                "#rc-tabs-0-tab-rights",
-                "#rc-tabs-1-tab-rights",
-                "[role='tab']:has-text('免费正版')",
-                ".cheetah-tabs-tab:has-text('免费正版')",
-            ]
-            for selector in rights_tab_selectors:
+            auth_lib_clicked = False
+            for selector in BaijiahaoSelectors.AUTH_LIB_TAB_SELECTORS:
                 try:
-                    element = await page.wait_for_selector(selector, timeout=3000)
+                    element = await page.wait_for_selector(selector, timeout=2000)
                     if element:
                         await element.click()
                         logger.info(f"[{self.account_name}] ✓ 免费正版图库标签已点击")
+                        auth_lib_clicked = True
                         break
                 except Exception:
                     continue
+            if not auth_lib_clicked:
+                logger.warning(f"[{self.account_name}] 免费正版图库标签点击失败")
             await self.random_delay(1, 2)
 
-            # 步骤8: 搜索"渡鸦"
-            logger.info(f"[{self.account_name}] 步骤8: 搜索图片")
-            search_input_selectors = [
-                "#rc-tabs-0-panel-rights > div > span > input",
-                "#rc-tabs-1-panel-rights > div > span > input",
-                "[placeholder*='搜索']",
-            ]
-            for selector in search_input_selectors:
+            # 步骤7: 搜索"渡鸦"
+            logger.info(f"[{self.account_name}] 步骤7: 搜索图片")
+            search_done = False
+            for selector in BaijiahaoSelectors.AUTH_LIB_SEARCH_SELECTORS:
                 try:
-                    element = await page.wait_for_selector(selector, timeout=3000)
+                    element = await page.wait_for_selector(selector, timeout=2000)
                     if element:
                         await element.click()
                         await asyncio.sleep(0.5)
@@ -341,67 +395,66 @@ class BaijiahaoAdapter(BaseAdapter):
                         await asyncio.sleep(0.5)
                         await page.keyboard.press("Enter")
                         logger.info(f"[{self.account_name}] ✓ 搜索完成")
+                        search_done = True
                         break
                 except Exception:
                     continue
+            if not search_done:
+                logger.warning(f"[{self.account_name}] 搜索操作失败")
             await self.random_delay(2, 3)
 
-            # 步骤9: 选择图片
-            logger.info(f"[{self.account_name}] 步骤9: 选择图片")
-            image_selectors = [
-                "#rc-tabs-1-panel-rights > div > div > div > div > div.pubu-content > div:nth-child(4) > div",
-                "#rc-tabs-0-panel-rights > div > div > div > div > div.pubu-content > div:nth-child(4) > div",
-                ".pubu-content > div:nth-child(1) > div",
-                ".pubu-content > div:nth-child(2) > div",
-            ]
-            for selector in image_selectors:
+            # 步骤8: 选择图片（点击图片本身，模拟真人点击）
+            logger.info(f"[{self.account_name}] 步骤8: 选择图片")
+            image_selected = False
+            for selector in BaijiahaoSelectors.AUTH_LIB_IMAGE_SELECTORS:
                 try:
-                    element = await page.wait_for_selector(selector, timeout=3000)
+                    element = await page.wait_for_selector(selector, timeout=2000)
                     if element:
-                        await element.click()
+                        # 使用 force=True 确保点击成功
+                        await element.click(force=True)
                         logger.info(f"[{self.account_name}] ✓ 图片已选择")
+                        image_selected = True
                         break
                 except Exception:
                     continue
+            if not image_selected:
+                logger.warning(f"[{self.account_name}] 图片选择失败")
             await self.random_delay(1, 2)
 
-            # 步骤10: 点击确认按钮
-            logger.info(f"[{self.account_name}] 步骤10: 点击确认按钮")
-            confirm_selectors = [
-                BaijiahaoSelectors.CONFIRM_BTN,
-                ".cheetah-modal-footer .cheetah-btn-primary",
-                "button:has-text('确定')",
-                "button:has-text('确认')",
-            ]
-            for selector in confirm_selectors:
+            # 步骤9: 点击确认按钮
+            logger.info(f"[{self.account_name}] 步骤9: 点击确认按钮")
+            confirm_clicked = False
+            for selector in BaijiahaoSelectors.CONFIRM_BTN_SELECTORS:
                 try:
                     element = await page.wait_for_selector(selector, timeout=3000)
                     if element:
                         await element.click()
                         logger.info(f"[{self.account_name}] ✓ 确认按钮已点击")
+                        confirm_clicked = True
                         break
                 except Exception:
                     continue
+            if not confirm_clicked:
+                logger.warning(f"[{self.account_name}] 确认按钮点击失败")
 
             # 等待10秒确保页面加载完成
             await asyncio.sleep(10)
 
-            # 步骤11: 点击发布按钮
-            logger.info(f"[{self.account_name}] 步骤11: 点击发布按钮")
-            publish_selectors = [
-                BaijiahaoSelectors.PUBLISH_BTN,
-                "button:has-text('发布')",
-                ".op-list-right button:has-text('发布')",
-            ]
-            for selector in publish_selectors:
+            # 步骤10: 点击发布按钮
+            logger.info(f"[{self.account_name}] 步骤10: 点击发布按钮")
+            publish_clicked = False
+            for selector in BaijiahaoSelectors.PUBLISH_BTN_SELECTORS:
                 try:
                     element = await page.wait_for_selector(selector, timeout=3000)
                     if element:
                         await element.click()
                         logger.info(f"[{self.account_name}] ✓ 发布按钮已点击")
+                        publish_clicked = True
                         break
                 except Exception:
                     continue
+            if not publish_clicked:
+                logger.warning(f"[{self.account_name}] 发布按钮点击失败")
             await self.random_delay(3, 5)
 
             logger.info(f"[{self.account_name}] ✅ 文章发布成功: {article.title[:30]}")

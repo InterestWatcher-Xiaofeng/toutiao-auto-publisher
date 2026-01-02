@@ -137,7 +137,7 @@ class MainWindow(QMainWindow):
     
     def init_ui(self):
         """初始化界面"""
-        self.setWindowTitle("内容自动发布系统 v1.0")
+        self.setWindowTitle("内容自动发布系统 v0.2")
         self.setMinimumSize(1200, 800)
         
         # 中央部件
